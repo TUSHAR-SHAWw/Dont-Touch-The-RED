@@ -1,0 +1,77 @@
+[gd_scene format=4 uid="uid://d1n2fki61b1ry"]
+
+[ext_resource type="Script" uid="uid://dsb3e1pbnmxxy" path="res://scripts/Main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://b58lmioqdchbl" path="res://scripts/Arena.gd" id="2_arena"]
+[ext_resource type="PackedScene" uid="uid://bqweyk4l8jjom" path="res://scenes/Player.tscn" id="3_player_scene"]
+[ext_resource type="Script" uid="uid://cv2icn8frvlt4" path="res://scripts/DangerManager.gd" id="4_danger"]
+[ext_resource type="Script" uid="uid://5pfnex2hmc6" path="res://scripts/UIManager.gd" id="5_ui"]
+[ext_resource type="Script" uid="uid://c66mynr7wpfwl" path="res://scripts/GameCamera.gd" id="6_camera"]
+[ext_resource type="Script" uid="uid://bi5x7pvfmanqc" path="res://scripts/AudioManager.gd" id="7_audio"]
+[ext_resource type="AudioStream" uid="uid://x82ouh61q0us" path="res://assets/sounds/music/game-music-loop-6-144641.mp3" id="7_bby8w"]
+[ext_resource type="AudioStream" uid="uid://c0ja26o5w67mh" path="res://assets/sounds/music/game-start-music-loop.mp3" id="7_l1wex"]
+[ext_resource type="AudioStream" uid="uid://btumuxna211om" path="res://assets/sounds/music/tap.wav" id="8_4u0jc"]
+[ext_resource type="Script" uid="uid://dqx5cfyhlfwjg" path="res://scripts/GameTuning.gd" id="8_tuning"]
+[ext_resource type="AudioStream" uid="uid://djlnjng8qdh2y" path="res://assets/sounds/sfxs/danger.mp3" id="10_lj5kn"]
+[ext_resource type="AudioStream" uid="uid://dfcobne5g1kmn" path="res://assets/sounds/music/coin.wav" id="10_rqvo4"]
+[ext_resource type="AudioStream" uid="uid://b72ul4ysyoh6q" path="res://assets/sounds/music/power_up.wav" id="11_f1627"]
+[ext_resource type="AudioStream" uid="uid://bxmdymwr712db" path="res://assets/sounds/sfxs/game-over-arcade-6435.mp3" id="11_k67dx"]
+[ext_resource type="AudioStream" uid="uid://b4sdk3lguawwm" path="res://assets/sounds/sfxs/coin.mp3" id="13_xxwxu"]
+[ext_resource type="AudioStream" uid="uid://cdkv0lq3v8ycs" path="res://assets/sounds/sfxs/coin2.mp3" id="14_rqype"]
+[ext_resource type="AudioStream" uid="uid://dgen7k4s6aswt" path="res://assets/sounds/sfxs/Shield.mp3" id="16_8e850"]
+[ext_resource type="AudioStream" uid="uid://d2uvi1a4ofgm0" path="res://assets/sounds/sfxs/level-up.mp3" id="17_f0w00"]
+[ext_resource type="AudioStream" uid="uid://ckbxfeg4bfig4" path="res://assets/sounds/sfxs/power-up-01a-484722.mp3" id="18_loyo7"]
+
+[node name="Main" type="Node2D" unique_id=322248154]
+script = ExtResource("1_main")
+
+[node name="Arena" type="Node2D" parent="." unique_id=746061054]
+script = ExtResource("2_arena")
+
+[node name="DangerManager" type="Node2D" parent="." unique_id=1320534535]
+script = ExtResource("4_danger")
+
+[node name="Player" parent="." unique_id=1547107362 instance=ExtResource("3_player_scene")]
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=266604354]
+script = ExtResource("6_camera")
+ui_top_reserve = 236.0
+
+[node name="AudioManager" type="Node" parent="." unique_id=1497152108]
+script = ExtResource("7_audio")
+bg_music_stream = ExtResource("7_bby8w")
+gameplay_music_stream = ExtResource("7_l1wex")
+ui_stream = ExtResource("8_4u0jc")
+warning_stream = ExtResource("8_4u0jc")
+danger_stream = ExtResource("10_lj5kn")
+death_stream = ExtResource("11_k67dx")
+coin_stream = ExtResource("10_rqvo4")
+rare_coin_stream = ExtResource("13_xxwxu")
+epic_coin_stream = ExtResource("14_rqype")
+powerup_stream = ExtResource("11_f1627")
+shield_stream = ExtResource("16_8e850")
+score_boost_stream = ExtResource("17_f0w00")
+magnet_stream = ExtResource("18_loyo7")
+sfx_volume_db = -10.0
+
+[node name="MusicPlayer" type="AudioStreamPlayer" parent="AudioManager" unique_id=1369907065]
+stream = ExtResource("7_l1wex")
+
+[node name="UIPlayer" type="AudioStreamPlayer" parent="AudioManager" unique_id=2003075081]
+
+[node name="WarningPlayer" type="AudioStreamPlayer" parent="AudioManager" unique_id=1089315716]
+
+[node name="DangerPlayer" type="AudioStreamPlayer" parent="AudioManager" unique_id=359568214]
+
+[node name="DeathPlayer" type="AudioStreamPlayer" parent="AudioManager" unique_id=699837356]
+
+[node name="CoinPlayer" type="AudioStreamPlayer" parent="AudioManager" unique_id=164846289]
+
+[node name="PowerupPlayer" type="AudioStreamPlayer" parent="AudioManager" unique_id=1309857704]
+
+[node name="GameTuning" type="Node" parent="." unique_id=233873641]
+script = ExtResource("8_tuning")
+
+[node name="UI" type="CanvasLayer" parent="." unique_id=295687660]
+script = ExtResource("5_ui")
+
+[node name="Performance Monitor" type="Node" parent="." unique_id=769725138]

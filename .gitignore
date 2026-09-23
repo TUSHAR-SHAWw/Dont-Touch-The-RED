@@ -1,0 +1,4 @@
+.godot/
+.vscode/
+build/
+scenes/*.tmp
