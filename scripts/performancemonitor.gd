@@ -6,6 +6,7 @@ extends Node
 ## Godot 4.x
 ##
 ## Full performance monitor with automatic panel height.
+## Hidden in exported builds so it never appears in a submitted game.
 ## ============================================================
 
 @export var enabled := true
@@ -14,7 +15,7 @@ extends Node
 @export var update_interval := 1.0
 
 var panel: Panel
-var label: RichTextLabel
+var label: RichLabel
 
 var elapsed := 0.0
 
@@ -29,10 +30,19 @@ var _version_text := ""
 
 
 func _ready() -> void:
+	# The performance overlay is a developer tool. Never show it in an
+	# exported build — reviewers would judge the game as unpolished.
+	# In the editor we still want it visible for debugging.
+	if not Engine.is_editor_hint():
+		enabled = false
+	if not enabled:
+		return
 	_create_panel()
 
 
 func _process(delta: float) -> void:
+	if not enabled:
+		return
 	elapsed += delta
 
 	var fps := Engine.get_frames_per_second()

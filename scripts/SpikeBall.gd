@@ -1,7 +1,7 @@
 extends Area2D
 
 @export var radius := 18.0
-@export var speed := 180.0
+@export var ball_speed := 180.0
 @export var warning_time := 1.0
 @export var active_time := 3.0
 
@@ -31,7 +31,6 @@ func setup(start_position: Vector2, direction: Vector2, ball_speed: float, warn:
 	position = start_position
 
 	velocity = direction.normalized() * ball_speed
-	speed = ball_speed
 
 	warning_time = warn
 	active_time = active_duration

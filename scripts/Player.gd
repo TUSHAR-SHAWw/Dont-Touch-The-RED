@@ -8,15 +8,20 @@ const SkinCatalog := preload("res://scripts/SkinCatalog.gd")
 
 @export_group("Movement")
 
-@export var radius := 30.0
+@export var radius := 32.0
 @export var max_speed := 420.0
 @export var acceleration := 2000.0
 @export var friction := 1800.0
-@export var skin_scale := .4
+@export var skin_scale := 1.0
 
 # ============================================================
 # VISUAL
 # ============================================================
+
+## All skin textures are 1:1 square. The sprite scale is derived from
+## the actual texture size so the rendered player stays a consistent
+## size regardless of the source texture resolution.
+const SKIN_TEXTURE_SIZE := 185.0
 
 @export_group("Visual")
 
@@ -24,10 +29,12 @@ const SkinCatalog := preload("res://scripts/SkinCatalog.gd")
 @export var trail_length := 15
 @export var pulse_enabled := true
 @export var pulse_amount := 0.055
-@export var rotation_enabled := true 
-@export var rotation_multipler := 3
+@export var rotation_enabled := true
+@export var rotation_multiplier := 3
 
-@export var visual_radius := radius*skin_scale*3
+## Visual radius for trail/pulse effects. Kept in sync with `radius`
+## so the effects align with the rendered sprite.
+var visual_radius := radius
 
 
 
@@ -132,7 +139,7 @@ func _ready() -> void:
 	add_to_group("player")
 
 	# --------------------------------------------------------
-	# Find arena
+# Find arena
 	# --------------------------------------------------------
 	var arena := get_node_or_null("../Arena")
 
@@ -146,8 +153,17 @@ func _ready() -> void:
 		collision.shape.radius = radius
 	# --------------------------------------------------------
 	# Base sprite size
+	# Skin textures are 1:1 square. Scale = visual diameter / texture size.
+	# This keeps the rendered player the same size regardless of source resolution.
 	# --------------------------------------------------------
-	_base_sprite_scale = Vector2.ONE * (radius * 2.0 / 64.0) * skin_scale
+	var tex_size := SKIN_TEXTURE_SIZE
+	if is_instance_valid(player_sprite) and player_sprite.texture:
+		tex_size = float(max(player_sprite.texture.get_width(), player_sprite.texture.get_height()))
+	_base_sprite_scale = Vector2.ONE * (radius * 2.0 / tex_size) * skin_scale
+
+	# Enable smooth filtering so 1:1 pixel-art skins don't look blocky.
+	if is_instance_valid(player_sprite) and player_sprite.texture:
+		player_sprite.texture_filter = 1  # CanvasItem.LINEAR (Texture2D.FILTER_LINEAR)
 
 	player_sprite.scale = _base_sprite_scale
 	# --------------------------------------------------------
@@ -239,7 +255,7 @@ func _physics_process(delta: float) -> void:
 	if rotation_enabled and speed > 10.0:
 
 		player_sprite.rotation += (
-			velocity.x * delta *  0.0015 * rotation_multipler
+			velocity.x * delta *  0.0015 * rotation_multiplier
 		)
 	# --------------------------------------------------------
 	# Trail
@@ -347,12 +363,25 @@ func set_skin(index: int) -> void:
 	if not is_instance_valid(player_sprite):
 		return
 
+	# Recalculate the sprite scale from the new texture's actual size.
+	# Different skins may have different source resolutions, so we always
+	# derive the scale from the loaded texture rather than a constant.
+	var tex_size := SKIN_TEXTURE_SIZE
+	if player_sprite.texture:
+		tex_size = float(max(player_sprite.texture.get_width(), player_sprite.texture.get_height()))
+	_base_sprite_scale = Vector2.ONE * (radius * 2.0 / tex_size) * skin_scale
+
 	if is_dead:
 		player_sprite.modulate = Color("#7a1d1d")
 	else:
 
 		player_sprite.modulate = Color.WHITE
 		player_sprite.texture = SkinCatalog.get_texture(skin_index)
+		# Re-derive scale again now that the texture is set.
+		if player_sprite.texture:
+			tex_size = float(max(player_sprite.texture.get_width(), player_sprite.texture.get_height()))
+			_base_sprite_scale = Vector2.ONE * (radius * 2.0 / tex_size) * skin_scale
+		player_sprite.scale = _base_sprite_scale
 	_dirty = true
 	queue_redraw()
 # ============================================================

@@ -34,7 +34,7 @@ script = ExtResource("4_danger")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=266604354]
 script = ExtResource("6_camera")
-ui_top_reserve = 236.0
+ui_top_reserve = 224.0
 
 [node name="AudioManager" type="Node" parent="." unique_id=1497152108]
 script = ExtResource("7_audio")

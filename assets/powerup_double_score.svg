@@ -1,1 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72"><circle cx="36" cy="39" r="27" fill="#5b3900" opacity=".35"/><circle cx="36" cy="34" r="24" fill="#f4b83f" stroke="#fff0a0" stroke-width="3"/><path d="M27 22h17l-8 12h10L29 51l5-13H24z" fill="#fff8d2"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="185" height="185" viewBox="0 0 185 185" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="doubleBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffe85c"/>
+      <stop offset="40%" stop-color="#f7d000"/>
+      <stop offset="70%" stop-color="#cc9900"/>
+      <stop offset="100%" stop-color="#8a6b00"/>
+    </linearGradient>
+    <linearGradient id="doubleShine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fffde7" stop-opacity="1"/>
+      <stop offset="35%" stop-color="#ffe85c" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#cc9900" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="doubleGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="doubleShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="3" dy="5" stdDeviation="4" flood-color="#4a3500" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  <!-- Outer glow ring -->
+  <circle cx="92.5" cy="92.5" r="92" fill="none" stroke="#ffe85c" stroke-width="4" opacity="0.7" filter="url(#doubleGlow)"/>
+  <!-- Thick arcade rim -->
+  <circle cx="92.5" cy="92.5" r="88" fill="none" stroke="#4a3500" stroke-width="8" filter="url(#doubleShadow)"/>
+  <!-- Main background -->
+  <circle cx="92.5" cy="92.5" r="82" fill="#3d2f00" filter="url(#doubleShadow)"/>
+  <!-- Bold "2×" text - arcade font style -->
+  <text x="92.5" y="112" text-anchor="middle" font-family="monospace, monospace" font-size="76" font-weight="900" fill="#fffde7" font-variant-numeric="tabular-nums" paint-order="stroke fill" stroke="#c99000" stroke-width="3" filter="url(#doubleGlow)">2×</text>
+  <!-- Inner highlight text -->
+  <text x="92.5" y="110" text-anchor="middle" font-family="monospace, monospace" font-size="74" font-weight="900" fill="url(#doubleShine)" font-variant-numeric="tabular-nums">2×</text>
+  <!-- Thick arcade rim -->
+  <circle cx="92.5" cy="92.5" r="88" fill="none" stroke="#f7d000" stroke-width="5" opacity="0.8"/>
+  <!-- Sparkle corners -->
+  <g fill="#fffde7" filter="url(#doubleGlow)">
+    <circle cx="145" cy="40" r="5"/>
+    <circle cx="40" cy="145" r="4"/>
+    <circle cx="145" cy="145" r="3.5"/>
+    <circle cx="40" cy="40" r="3"/>
+  </g>
+  <!-- Bottom accent line -->
+  <path d="M45 150 Q92.5 160 140 150" fill="none" stroke="#ffe85c" stroke-width="4" opacity="0.6" stroke-linecap="round"/>
+</svg>

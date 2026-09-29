@@ -6,9 +6,16 @@ signal recycled(coin)
 
 enum Kind { COMMON, RARE, EPIC }
 
+## All coin textures are 1:1 square (185px). The sprite scale is derived from
+## the desired visual diameter so the rendered coin stays consistent.
+const TEXTURE_SIZE := 185.0
+
 @export var common_texture: Texture2D = preload("res://assets/coin_common.svg")
 @export var rare_texture: Texture2D = preload("res://assets/coin_rare.svg")
 @export var epic_texture: Texture2D = preload("res://assets/coin_epic.svg")
+
+## Visual diameter in world pixels. Matches the collision radius.
+@export var visual_radius := 16.0
 
 var value := 1
 var kind := Kind.COMMON
@@ -24,6 +31,22 @@ var _recycled := false
 var _collider: CollisionShape2D
 @onready var visual: Sprite2D = $Sprite2D
 
+func _ready() -> void:
+	# Sprite scale = visual diameter / texture size (1:1 assets).
+	visual.scale = Vector2.ONE * (visual_radius * 2.0 / TEXTURE_SIZE)
+	# Smooth filtering keeps 1:1 pixel-art from looking blocky.
+	visual.texture_filter = 1  # CanvasItem.LINEAR
+	_main = get_tree().current_scene
+	_magnet_supported = _main != null and _main.has_method("is_magnet_active")
+	_collider = get_node_or_null("CollisionShape2D")
+	collision_layer = 0
+	collision_mask = 1
+	body_entered.connect(_on_body_entered)
+	# Lifetime is counted in _process, so a pooled coin can be re-armed.
+	monitoring = false
+	set_process(false)
+	_apply_visual()
+
 ## Arm a pooled coin for a fresh spawn. Set `position` before calling this.
 func activate(new_kind: int, common_lifetime := 9.0, rare_lifetime := 12.0, epic_lifetime := 15.0) -> void:
 	setup(new_kind, common_lifetime, rare_lifetime, epic_lifetime)
@@ -33,10 +56,13 @@ func activate(new_kind: int, common_lifetime := 9.0, rare_lifetime := 12.0, epic
 	_origin = position
 	_kill_tween()
 	modulate = Color.WHITE
+	# Reset the Area2D scale (used for the fade-out tween) and the
+	# visual sprite scale (set from the 1:1 texture size in _ready).
 	scale = Vector2.ONE
-	rotation = 0.0
 	if is_instance_valid(visual):
+		visual.scale = Vector2.ONE * (visual_radius * 2.0 / TEXTURE_SIZE)
 		visual.rotation = 0.0
+	rotation = 0.0
 	visible = true
 	monitoring = true
 	if is_instance_valid(_collider):
@@ -63,18 +89,6 @@ func setup(new_kind: int, common_lifetime := 9.0, rare_lifetime := 12.0, epic_li
 		_:
 			value = 1
 			lifetime = common_lifetime
-	_apply_visual()
-
-func _ready() -> void:
-	_main = get_tree().current_scene
-	_magnet_supported = _main != null and _main.has_method("is_magnet_active")
-	_collider = get_node_or_null("CollisionShape2D")
-	collision_layer = 0
-	collision_mask = 1
-	body_entered.connect(_on_body_entered)
-	# Lifetime is counted in _process, so a pooled coin can be re-armed.
-	monitoring = false
-	set_process(false)
 	_apply_visual()
 
 func _process(delta: float) -> void:
@@ -111,8 +125,10 @@ func _on_body_entered(body: Node) -> void:
 	removed.emit(self)
 	collected.emit(value)
 	_kill_tween()
+	# Scale the visual sprite (not the Area2D parent) so the effect
+	# composes cleanly with the per-texture scale set in _ready().
 	_tween = create_tween().set_parallel(true)
-	_tween.tween_property(self, "scale", Vector2.ONE * 1.65, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_tween.tween_property(visual, "scale", visual.scale * 1.65, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_tween.tween_property(self, "modulate:a", 0.0, 0.18)
 	_tween.chain().tween_callback(_recycle)
 
@@ -142,3 +158,8 @@ func _apply_visual() -> void:
 				visual.texture = epic_texture
 			_:
 				visual.texture = common_texture
+		# Re-derive the scale from the newly assigned texture's actual size.
+		var tex_size := TEXTURE_SIZE
+		if visual.texture:
+			tex_size = float(max(visual.texture.get_width(), visual.texture.get_height()))
+		visual.scale = Vector2.ONE * (visual_radius * 2.0 / tex_size)

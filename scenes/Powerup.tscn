@@ -13,5 +13,6 @@ script = ExtResource("1_powerup")
 shape = SubResource("CircleShape2D_powerup")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-scale = Vector2(0.5, 0.5)
 texture = ExtResource("2_powerup")
+# Sprite scale is computed in Powerup.gd from the 1:1 185px texture size.
+# No manual scale override here.

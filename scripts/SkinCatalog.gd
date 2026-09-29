@@ -2,6 +2,12 @@ extends RefCounted
 
 const SKIN_PATH := "res://assets/f_skins/"
 
+## All skin textures are 1:1 square. This is the nominal source texture
+## size in pixels. The Player script derives its sprite scale from the
+## actual loaded texture size, so this constant is only a fallback for
+## the brief moment before the texture is fully loaded.
+const SKIN_TEXTURE_SIZE := 185.0
+
 const DEFAULT_SKIN := {
 	"name": "Red",
 	"cost": 0,

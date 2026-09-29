@@ -2123,7 +2123,8 @@ func _build_skin_menu() -> void:
 
 	grid.name = "SkinGrid"
 
-	grid.columns = 5
+	# 4 columns; each card is square to match the 1:1 skin textures.
+	grid.columns = 4
 
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
@@ -2142,6 +2143,10 @@ func _build_skin_menu() -> void:
 	# --------------------------------
 	# Skin cards
 	# --------------------------------
+	# All skin textures are 1:1 square (185px). The card uses a square
+	# display area so the full artwork is visible without letterboxing.
+
+	const SKIN_CARD_SIZE := 142
 
 	for i in range(SkinCatalog.count()):
 
@@ -2150,8 +2155,8 @@ func _build_skin_menu() -> void:
 		var card := VBoxContainer.new()
 
 		card.custom_minimum_size = Vector2(
-			142,
-			150
+			SKIN_CARD_SIZE,
+			SKIN_CARD_SIZE + 46
 		)
 
 		card.add_theme_constant_override(
@@ -2160,20 +2165,21 @@ func _build_skin_menu() -> void:
 		)
 
 		# ----------------------------
-		# Skin image
+		# Skin image (square, 1:1)
 		# ----------------------------
 
 		var skin_texture := TextureRect.new()
 
 		skin_texture.custom_minimum_size = Vector2(
-			142,
-			105
+			SKIN_CARD_SIZE,
+			SKIN_CARD_SIZE
 		)
 
 		skin_texture.texture = SkinCatalog.get_texture(i)
 
 		skin_texture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 
+		# 1:1 textures: fit inside the square card without distortion.
 		skin_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 
 		card.add_child(
@@ -2190,7 +2196,7 @@ func _build_skin_menu() -> void:
 		)
 
 		skin_button.custom_minimum_size = Vector2(
-			142,
+			SKIN_CARD_SIZE,
 			40
 		)
 

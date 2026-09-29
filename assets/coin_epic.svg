@@ -1,1 +1,52 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72"><defs><radialGradient id="g"><stop stop-color="#f7dcff"/><stop offset=".45" stop-color="#c879f2"/><stop offset="1" stop-color="#6d2ba8"/></radialGradient></defs><circle cx="36" cy="39" r="27" fill="#351251" opacity=".4"/><circle cx="36" cy="34" r="26" fill="url(#g)" stroke="#f5d5ff" stroke-width="3"/><path d="M36 17l5 11 12 1-9 8 3 12-11-6-11 6 3-12-9-8 12-1z" fill="#fff0ff" opacity=".9"/></svg>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="185" height="185" viewBox="0 0 185 185" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="coinEpicBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fff3a0"/>
+      <stop offset="25%" stop-color="#ffd93a"/>
+      <stop offset="50%" stop-color="#f5c000"/>
+      <stop offset="75%" stop-color="#cc9900"/>
+      <stop offset="100%" stop-color="#8a6b00"/>
+    </linearGradient>
+    <linearGradient id="coinEpicShine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fffde7" stop-opacity="1"/>
+      <stop offset="30%" stop-color="#ffe87c" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#f5c000" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="coinGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="coinShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="3" dy="5" stdDeviation="4" flood-color="#4a3500" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  <!-- Outer glow ring -->
+  <circle cx="92.5" cy="92.5" r="92" fill="none" stroke="#ffd54f" stroke-width="4" opacity="0.6" filter="url(#coinGlow)"/>
+  <!-- Thick arcade rim -->
+  <circle cx="92.5" cy="92.5" r="88" fill="none" stroke="#5d4000" stroke-width="8" filter="url(#coinShadow)"/>
+  <!-- Main coin face -->
+  <circle cx="92.5" cy="92.5" r="82" fill="url(#coinEpicBody)" filter="url(#coinShadow)"/>
+  <!-- Top shine stripe -->
+  <ellipse cx="92.5" cy="55" rx="60" ry="18" fill="url(#coinEpicShine)"/>
+  <!-- Inner rim highlight -->
+  <circle cx="92.5" cy="92.5" r="76" fill="none" stroke="#fff59d" stroke-width="3" opacity="0.9"/>
+  <!-- Pixel-art "8" -->
+  <text x="92.5" y="108" text-anchor="middle" font-family="monospace, monospace" font-size="64" font-weight="900" fill="#2d2000" font-variant-numeric="tabular-nums" paint-order="stroke fill" stroke="#fff8b0" stroke-width="2">8</text>
+  <!-- Bottom shadow arc -->
+  <path d="M50 140 Q92.5 155 135 140" fill="none" stroke="#5d4000" stroke-width="5" opacity="0.5"/>
+  <!-- Sparkle accents -->
+  <g fill="#fffde7" filter="url(#coinGlow)">
+    <circle cx="140" cy="40" r="5"/>
+    <circle cx="45" cy="145" r="4"/>
+    <circle cx="145" cy="145" r="3.5"/>
+    <circle cx="40" cy="35" r="3"/>
+  </g>
+  <!-- Star burst top -->
+  <g fill="#fffde7" filter="url(#coinGlow)">
+    <polygon points="92.5,20 95,30 106,30 97.5,38 100,48 92.5,43 85,48 88,38 79,30 89.5,30"/>
+  </g>
+</svg>

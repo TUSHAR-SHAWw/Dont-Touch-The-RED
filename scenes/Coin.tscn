@@ -13,5 +13,6 @@ script = ExtResource("1_coin")
 shape = SubResource("CircleShape2D_coin")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-scale = Vector2(0.5, 0.5)
 texture = ExtResource("2_coin")
+# Sprite scale is computed in Coin.gd from the 1:1 185px texture size.
+# No manual scale override here.
