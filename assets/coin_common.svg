@@ -1,30 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="185" height="185" viewBox="0 0 185 185" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="coinCommonBody" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#e4a036"/>
-      <stop offset="50%" stop-color="#c98022"/>
-      <stop offset="100%" stop-color="#965a10"/>
+    <radialGradient id="coinCommonBody" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#fff3b0"/>
+      <stop offset="25%" stop-color="#ffd978"/>
+      <stop offset="58%" stop-color="#f2b33d"/>
+      <stop offset="100%" stop-color="#b86d15"/>
+    </radialGradient>
+    <linearGradient id="coinCommonRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff8d6"/>
+      <stop offset="100%" stop-color="#6d3d00"/>
     </linearGradient>
-    <linearGradient id="coinCommonShine" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffe87c" stop-opacity="0.9"/>
-      <stop offset="40%" stop-color="#f5c842" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#c98022" stop-opacity="0"/>
-    </linearGradient>
-    <filter id="coinShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="3" dy="5" stdDeviation="3" flood-color="#000000" flood-opacity="0.5"/>
+    <filter id="coinShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#000000" flood-opacity="0.36"/>
     </filter>
   </defs>
-  <!-- Thick arcade rim -->
-  <circle cx="92.5" cy="92.5" r="88" fill="none" stroke="#3d2500" stroke-width="8" filter="url(#coinShadow)"/>
-  <!-- Main coin face -->
-  <circle cx="92.5" cy="92.5" r="82" fill="url(#coinCommonBody)" filter="url(#coinShadow)"/>
-  <!-- Top shine stripe -->
-  <ellipse cx="92.5" cy="55" rx="60" ry="18" fill="url(#coinCommonShine)"/>
-  <!-- Inner rim highlight -->
-  <circle cx="92.5" cy="92.5" r="76" fill="none" stroke="#ffd45a" stroke-width="2" opacity="0.7"/>
-  <!-- Pixel-art "1" -->
-  <text x="92.5" y="108" text-anchor="middle" font-family="monospace, monospace" font-size="64" font-weight="900" fill="#2a1800" font-variant-numeric="tabular-nums" paint-order="stroke fill" stroke="#ffec8a" stroke-width="2">1</text>
-  <!-- Bottom shadow arc -->
-  <path d="M50 140 Q92.5 155 135 140" fill="none" stroke="#3d2500" stroke-width="4" opacity="0.4"/>
+
+  <circle cx="92.5" cy="92.5" r="90" fill="none" stroke="#3a2200" stroke-width="7" opacity="0.9"/>
+  <circle cx="92.5" cy="92.5" r="82" fill="url(#coinCommonBody)" stroke="url(#coinCommonRim)" stroke-width="8" filter="url(#coinShadow)"/>
+  <ellipse cx="92.5" cy="55" rx="56" ry="18" fill="#fff7d0" opacity="0.68"/>
+  <circle cx="92.5" cy="92.5" r="68" fill="none" stroke="#fff2a5" stroke-width="2.8" opacity="0.9"/>
+
+  <g fill="#fffaf0" opacity="0.9">
+    <polygon points="92.5,34 96,45 108,45 98.5,52 101.5,64 92.5,57.5 83.5,64 86.5,52 77,45 89,45"/>
+  </g>
+
+  <text x="92.5" y="110" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="64" font-weight="900" fill="#412700" paint-order="stroke fill" stroke="#fff0b3" stroke-width="2">1</text>
+
+  <path d="M45 138 Q92.5 154 140 138" fill="none" stroke="#5a3400" stroke-width="5" opacity="0.45" stroke-linecap="round"/>
 </svg>

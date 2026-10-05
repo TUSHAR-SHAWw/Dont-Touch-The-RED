@@ -96,6 +96,7 @@ func _finish() -> void:
 	phase = Phase.DONE
 	_collider.set_deferred("disabled", true)
 	monitoring = false
+	monitorable = false
 	_dirty = true
 	_last_drawn_phase = Phase.DONE
 	finished.emit()

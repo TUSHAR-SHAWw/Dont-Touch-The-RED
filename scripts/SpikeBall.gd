@@ -69,6 +69,11 @@ func _process(delta: float) -> void:
 		_bounce_inside_arena()
 
 		if _timer >= active_time:
+			active = false
+			monitoring = false
+			monitorable = false
+			if _collider:
+				_collider.set_deferred("disabled", true)
 			queue_free()
 
 func _bounce_inside_arena() -> void:

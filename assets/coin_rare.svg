@@ -1,35 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="185" height="185" viewBox="0 0 185 185" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="coinRareBody" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#e8ebf0"/>
-      <stop offset="40%" stop-color="#b8c0cc"/>
-      <stop offset="70%" stop-color="#8a94a3"/>
-      <stop offset="100%" stop-color="#5a6570"/>
+    <radialGradient id="coinRareBody" cx="35%" cy="28%" r="72%">
+      <stop offset="0%" stop-color="#f7fbff"/>
+      <stop offset="24%" stop-color="#dfe8f6"/>
+      <stop offset="60%" stop-color="#979fb2"/>
+      <stop offset="100%" stop-color="#4e5865"/>
+    </radialGradient>
+    <linearGradient id="coinRareRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#1f2a35"/>
     </linearGradient>
-    <linearGradient id="coinRareShine" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
-      <stop offset="35%" stop-color="#d0d8e0" stop-opacity="0.4"/>
-      <stop offset="100%" stop-color="#8a94a3" stop-opacity="0"/>
-    </linearGradient>
-    <filter id="coinShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="3" dy="5" stdDeviation="3" flood-color="#000000" flood-opacity="0.5"/>
+    <filter id="coinShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#000000" flood-opacity="0.38"/>
     </filter>
   </defs>
-  <!-- Thick arcade rim -->
-  <circle cx="92.5" cy="92.5" r="88" fill="none" stroke="#2a2f36" stroke-width="8" filter="url(#coinShadow)"/>
-  <!-- Main coin face -->
-  <circle cx="92.5" cy="92.5" r="82" fill="url(#coinRareBody)" filter="url(#coinShadow)"/>
-  <!-- Top shine stripe -->
-  <ellipse cx="92.5" cy="55" rx="60" ry="18" fill="url(#coinRareShine)"/>
-  <!-- Inner rim highlight -->
-  <circle cx="92.5" cy="92.5" r="76" fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.8"/>
-  <!-- Pixel-art "3" -->
-  <text x="92.5" y="108" text-anchor="middle" font-family="monospace, monospace" font-size="64" font-weight="900" fill="#1a1f26" font-variant-numeric="tabular-nums" paint-order="stroke fill" stroke="#ffffff" stroke-width="2">3</text>
-  <!-- Bottom shadow arc -->
-  <path d="M50 140 Q92.5 155 135 140" fill="none" stroke="#2a2f36" stroke-width="4" opacity="0.5"/>
-  <!-- Star accent (rare indicator) -->
-  <g fill="#ffffff" opacity="0.8">
-    <polygon points="92.5,32 95.5,42 106,42 97.5,49 100,58 92.5,52 85,58 88,49 79,42 89.5,42"/>
+
+  <circle cx="92.5" cy="92.5" r="90" fill="none" stroke="#1f2a35" stroke-width="7" opacity="0.9"/>
+  <circle cx="92.5" cy="92.5" r="82" fill="url(#coinRareBody)" stroke="url(#coinRareRim)" stroke-width="8" filter="url(#coinShadow)"/>
+  <ellipse cx="92.5" cy="55" rx="58" ry="18" fill="#ffffff" opacity="0.7"/>
+  <circle cx="92.5" cy="92.5" r="68" fill="none" stroke="#f3f9ff" stroke-width="2.8" opacity="0.9"/>
+
+  <g fill="#ffffff" opacity="0.9">
+    <polygon points="92.5,34 96,45 108,45 98.5,52 101.5,64 92.5,57.5 83.5,64 86.5,52 77,45 89,45"/>
   </g>
+
+  <text x="92.5" y="110" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="64" font-weight="900" fill="#1a2530" paint-order="stroke fill" stroke="#ffffff" stroke-width="2">3</text>
+
+  <path d="M45 138 Q92.5 154 140 138" fill="none" stroke="#222d38" stroke-width="5" opacity="0.45" stroke-linecap="round"/>
 </svg>

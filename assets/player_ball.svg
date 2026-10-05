@@ -1,5 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
-  <circle cx="32" cy="32" r="27" fill="white" stroke="white" stroke-width="4"/>
-  <circle cx="23" cy="22" r="10" fill="white" fill-opacity="0.42"/>
-  <circle cx="20" cy="19" r="4" fill="white" fill-opacity="0.8"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <radialGradient id="ballGlow" cx="32%" cy="28%" r="72%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="18%" stop-color="#f3f8ff"/>
+      <stop offset="52%" stop-color="#dbe7ff"/>
+      <stop offset="100%" stop-color="#7fa9ff"/>
+    </radialGradient>
+    <filter id="ballShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#06254d" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <circle cx="64" cy="64" r="54" fill="url(#ballGlow)" stroke="#dfeeff" stroke-width="6" filter="url(#ballShadow)"/>
+  <circle cx="52" cy="44" r="18" fill="#ffffff" opacity="0.52"/>
+  <circle cx="46" cy="40" r="7" fill="#ffffff" opacity="0.9"/>
+  <path d="M24 86 C34 100, 49 106, 64 106 C84 106, 97 98, 105 84" fill="none" stroke="#8ab6ff" stroke-width="6" stroke-linecap="round" opacity="0.7"/>
 </svg>
+

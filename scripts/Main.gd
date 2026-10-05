@@ -154,10 +154,13 @@ func _process(delta: float) -> void:
 		ui.update_active_effects(shield_active, score_boost_time, magnet_time)
 		_trigger_stage_progression()
 		if elapsed >= _next_milestone:
+			var milestone_bonus := 12 + int(score_multiplier * 10.0)
 			ui.show_milestone(_next_milestone)
-			game_camera.shake(2.5, 0.12)
-			run_coins += 5 + int(score_multiplier)
+			ui.show_pickup("+%d" % milestone_bonus, Color("#ffe07a"))
+			game_camera.shake(4.5, 0.14)
+			run_coins += milestone_bonus
 			score_multiplier = minf(5.0, score_multiplier + 0.5)
+			score_boost_time = maxf(score_boost_time, 2.5)
 			_next_milestone += int(tuning.milestone_interval)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -425,10 +428,12 @@ func _trigger_stage_progression() -> void:
 			label = "VOID"
 	var reward := int(tuning.stage_reward_coins + _current_stage * 8)
 	ui.show_stage(title + "\n" + label, "+%d COINS" % reward)
+	ui.show_pickup("+%d" % reward, Color("#ffd166"))
 	game_camera.shake(5.5 + _current_stage * 1.5, 0.16)
 	run_coins += reward
 	score_multiplier = minf(5.0, score_multiplier + tuning.stage_reward_score_bonus)
 	score_boost_time = maxf(score_boost_time, 4.0 + _current_stage)
+	ui.show_powerup("SURVIVAL BOOST +%ds" % int(4.0 + _current_stage))
 	_current_stage += 1
 
 func _mode_collectible_multiplier() -> float:

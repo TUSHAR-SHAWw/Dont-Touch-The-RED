@@ -1,64 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="185" height="185" viewBox="0 0 185 185" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="shieldBody" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#4da3ff"/>
-      <stop offset="50%" stop-color="#1e73e8"/>
-      <stop offset="100%" stop-color="#0d3d9e"/>
-    </linearGradient>
-    <linearGradient id="shieldShine" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#8fd0ff" stop-opacity="0.9"/>
-      <stop offset="40%" stop-color="#4da3ff" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#1e73e8" stop-opacity="0"/>
-    </linearGradient>
-    <filter id="shieldGlow" x="-30%" y="-30%" width="160%" height="160%">
-      <feGaussianBlur stdDeviation="5" result="blur"/>
-      <feMerge>
-        <feMergeNode in="blur"/>
-        <feMergeNode in="SourceGraphic"/>
-      </feMerge>
-    </filter>
-    <filter id="shieldShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="3" dy="5" stdDeviation="4" flood-color="#001a3a" flood-opacity="0.6"/>
+    <radialGradient id="shieldBody" cx="35%" cy="28%" r="72%">
+      <stop offset="0%" stop-color="#dff8ff"/>
+      <stop offset="28%" stop-color="#8ad5ff"/>
+      <stop offset="62%" stop-color="#39a3ff"/>
+      <stop offset="100%" stop-color="#0a4ba0"/>
+    </radialGradient>
+    <filter id="shieldShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#0b1f40" flood-opacity="0.42"/>
     </filter>
   </defs>
-  <!-- Outer glow ring -->
-  <circle cx="92.5" cy="92.5" r="92" fill="none" stroke="#4da3ff" stroke-width="4" opacity="0.7" filter="url(#shieldGlow)"/>
-  <!-- Thick arcade rim -->
-  <circle cx="92.5" cy="92.5" r="88" fill="none" stroke="#001a3a" stroke-width="8" filter="url(#shieldShadow)"/>
-  <!-- Main background -->
-  <circle cx="92.5" cy="92.5" r="82" fill="#001836" filter="url(#shieldShadow)"/>
-  <!-- Shield shape - classic arcade shield -->
-  <path d="M92.5 20 
-           L155 38 
-           Q168 48 168 68 
-           L168 128 
-           Q168 158 92.5 168 
-           Q20 158 20 128 
-           L20 68 
-           Q20 48 33 38 
-           Z" 
-        fill="url(#shieldBody)" 
-        stroke="#6ec3ff" 
-        stroke-width="4" 
-        filter="url(#shieldShadow)"/>
-  <!-- Shield center cross - classic arcade style -->
-  <path d="M92.5 45 L92.5 145" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
-  <path d="M55 92.5 L130 92.5" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.9"/>
-  <!-- Inner border -->
-  <path d="92.5 28 
-           L148 44 
-           Q158 52 158 72 
-           L158 118 
-           Q158 150 92.5 160 
-           Q27 150 27 118 
-           L27 72 
-           Q27 52 37 44 
-           Z" 
-        fill="none" 
-        stroke="#8fd0ff" 
-        stroke-width="2" 
-        opacity="0.5"/>
-  <!-- Top shine on shield face -->
-  <path d="M92.5 38 L92.5 85" stroke="#8fd0ff" stroke-width="3" opacity="0.5" stroke-linecap="round"/>
+
+  <circle cx="92.5" cy="92.5" r="92" fill="none" stroke="#69c7ff" stroke-width="4" opacity="0.7"/>
+  <circle cx="92.5" cy="92.5" r="82" fill="#071f3d"/>
+
+  <path d="M92.5 16 L152 36 L152 103 C152 144 127 163 92.5 174 C58 163 33 144 33 103 L33 36 Z"
+        fill="url(#shieldBody)" stroke="#bfeeff" stroke-width="6" filter="url(#shieldShadow)"/>
+
+  <path d="M92.5 34 L135 48 L135 98 C135 126 115 142 92.5 153 C70 142 50 126 50 98 L50 48 Z"
+        fill="none" stroke="#e8fbff" stroke-width="4" opacity="0.9"/>
+
+  <path d="M92.5 46 L92.5 146" stroke="#f6fdff" stroke-width="7" stroke-linecap="round" opacity="0.95"/>
+  <path d="M54 92.5 L131 92.5" stroke="#f6fdff" stroke-width="7" stroke-linecap="round" opacity="0.95"/>
+
+  <path d="M92.5 28 L130 42 L130 90" fill="none" stroke="#dffcff" stroke-width="3" opacity="0.8" stroke-linecap="round"/>
+  <path d="M92.5 28 L55 42 L55 90" fill="none" stroke="#dffcff" stroke-width="3" opacity="0.8" stroke-linecap="round"/>
 </svg>
