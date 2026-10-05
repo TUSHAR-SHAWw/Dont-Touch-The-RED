@@ -79,6 +79,7 @@ var pause_panel: Control
 
 var _flash: ColorRect
 var _milestone: Label
+var _stage_label: Label
 var _powerup_label: Label
 
 var _coins_label: Label
@@ -87,6 +88,7 @@ var _coins_label: Label
 var _score_label: Label
 var _multiplier_label: Label
 
+var _stage_panel: VBoxContainer
 var _effects_panel: VBoxContainer
 var _effect_labels: Dictionary = {}
 
@@ -180,24 +182,6 @@ func _ready() -> void:
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	add_child(_flash)
-
-	# ------------------------------------------------------------------------
-	# Milestone popup
-	# ------------------------------------------------------------------------
-
-	_milestone = _label(
-		"10 SECONDS",
-		34,
-		Color("#e02323")
-	)
-
-	_milestone.set_anchors_preset(Control.PRESET_CENTER)
-	_milestone.position = Vector2(-220.0, -24.0)
-	_milestone.size = Vector2(440.0, 48.0)
-	_milestone.modulate.a = 0.0
-	_milestone.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	add_child(_milestone)
 
 	# ------------------------------------------------------------------------
 	# Powerup popup
@@ -500,48 +484,25 @@ func pulse_danger() -> void:
 	)
 
 
+func show_stage(title: String, subtext := "") -> void:
+	if not is_instance_valid(_stage_label):
+		return
+	var display_text := title
+	if not subtext.is_empty():
+		display_text = title + "\n" + subtext
+	_stage_label.text = display_text
+	_stage_label.modulate = Color(1.0, 0.85, 0.42, 1.0)
+	var tween := create_tween()
+	tween.tween_property(
+		_stage_label,
+		"modulate",
+		Color(1.0, 1.0, 1.0, 1.0),
+		0.45
+	)
+
+
 func show_milestone(seconds: int) -> void:
-
-	_milestone.text = "%d SECONDS" % seconds
-
-	_milestone.modulate = Color(
-		1.0,
-		0.2,
-		0.2,
-		0.0
-	)
-
-	_milestone.scale = Vector2(0.85, 0.85)
-
-	var tween := create_tween().set_parallel(true)
-
-	tween.tween_property(
-		_milestone,
-		"modulate:a",
-		1.0,
-		0.12
-	)
-
-	tween.tween_property(
-		_milestone,
-		"scale",
-		Vector2(1.12, 1.12),
-		0.12
-	)
-
-	tween.chain().tween_property(
-		_milestone,
-		"modulate:a",
-		0.0,
-		0.7
-	)
-
-	tween.parallel().tween_property(
-		_milestone,
-		"scale",
-		Vector2.ONE,
-		0.7
-	)
+	show_stage("STAGE", "%d SECONDS" % seconds)
 
 
 func show_powerup(text: String) -> void:
@@ -1045,6 +1006,72 @@ func _build_hud() -> void:
 
 
 	# ------------------------------------------------------------------------
+	# Stage panel
+	# ------------------------------------------------------------------------
+
+	var stage_background := ColorRect.new()
+
+	stage_background.color = Color(
+		0.05,
+		0.05,
+		0.09,
+		0.78
+	)
+
+	stage_background.anchor_left = 1.0
+	stage_background.anchor_right = 1.0
+
+	stage_background.offset_left = -290.0
+	stage_background.offset_right = -18.0
+
+	stage_background.offset_top = 102.0
+	stage_background.offset_bottom = 190.0
+
+	stage_background.mouse_filter = (
+		Control.MOUSE_FILTER_IGNORE
+	)
+
+	hud.add_child(stage_background)
+
+	_stage_panel = VBoxContainer.new()
+
+	_stage_panel.position = Vector2(
+		12.0,
+		8.0
+	)
+
+	_stage_panel.size = Vector2(
+		248.0,
+		70.0
+	)
+
+	stage_background.add_child(
+		_stage_panel
+	)
+
+	var stage_title := _label(
+		"STAGE",
+		16,
+		Color("#b8b8c4")
+	)
+	stage_title.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_LEFT
+	)
+	_stage_panel.add_child(stage_title)
+
+	_stage_label = _label(
+		"1\nCOLD START",
+		18,
+		Color("#f3d17b")
+	)
+	_stage_label.horizontal_alignment = (
+		HORIZONTAL_ALIGNMENT_LEFT
+	)
+	_stage_label.visible = true
+	_stage_label.modulate = Color(1.0, 0.9, 0.5, 1.0)
+	_stage_panel.add_child(_stage_label)
+
+	# ------------------------------------------------------------------------
 	# Active effects
 	# ------------------------------------------------------------------------
 
@@ -1063,8 +1090,8 @@ func _build_hud() -> void:
 	effects_background.offset_left = -290.0
 	effects_background.offset_right = -18.0
 
-	effects_background.offset_top = 102.0
-	effects_background.offset_bottom = 224.0
+	effects_background.offset_top = 200.0
+	effects_background.offset_bottom = 322.0
 
 	effects_background.mouse_filter = (
 		Control.MOUSE_FILTER_IGNORE
@@ -1081,7 +1108,7 @@ func _build_hud() -> void:
 
 	_effects_panel.size = Vector2(
 		248.0,
-		106.0
+		110.0
 	)
 
 	effects_background.add_child(

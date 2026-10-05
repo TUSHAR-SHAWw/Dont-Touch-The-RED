@@ -41,3 +41,11 @@ extends Node
 @export var score_boost_duration := 8.0
 @export var magnet_duration := 8.0
 @export var shield_grace_duration := 1
+
+@export_group("Progression")
+@export var stage_1_threshold := 6.0
+@export var stage_2_threshold := 14.0
+@export var stage_3_threshold := 24.0
+@export var stage_4_threshold := 36.0
+@export var stage_reward_coins := 12
+@export var stage_reward_score_bonus := 0.5

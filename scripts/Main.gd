@@ -35,6 +35,7 @@ var coins := 0
 var selected_skin := 0
 var unlocked_skins: Array = []
 var _next_milestone := 10
+var _current_stage := 0
 var selected_mode := 0
 var score_progress := 0.0
 var score_multiplier := 1.0
@@ -151,6 +152,7 @@ func _process(delta: float) -> void:
 		score_progress += delta * _active_multiplier()
 		ui.update_timer(elapsed, int(score_progress), _active_multiplier(), coins + run_coins)
 		ui.update_active_effects(shield_active, score_boost_time, magnet_time)
+		_trigger_stage_progression()
 		if elapsed >= _next_milestone:
 			ui.show_milestone(_next_milestone)
 			game_camera.shake(2.5, 0.12)
@@ -197,6 +199,7 @@ func start_game() -> void:
 	is_paused = false
 	get_tree().paused = false
 	_next_milestone = int(tuning.milestone_interval)
+	_current_stage = 0
 	state = State.PLAYING
 	player.reset()
 	player.set_skin(selected_skin)
@@ -205,6 +208,7 @@ func start_game() -> void:
 	ui.update_active_effects(false, 0.0, 0.0)
 	ui.set_shop(coins, item_inventory)
 	ui.set_item_inventory(item_inventory)
+	ui.show_stage("STAGE 1", "COLD START")
 	_current_scene = get_tree().current_scene
 	_clear_coins()
 	_clear_powerups()
@@ -396,6 +400,36 @@ func _base_multiplier() -> float:
 	elif selected_mode == 2:
 		mode_bonus = tuning.zen_score_multiplier
 	return minf(5.0, (1.0 + multiplier_level * 0.5) * mode_bonus)
+
+func _trigger_stage_progression() -> void:
+	var stages := [
+		tuning.stage_1_threshold,
+		tuning.stage_2_threshold,
+		tuning.stage_3_threshold,
+		tuning.stage_4_threshold
+	]
+	if _current_stage >= stages.size():
+		return
+	if elapsed < stages[_current_stage]:
+		return
+	var title := "STAGE %d" % (_current_stage + 1)
+	var label := "COLD START"
+	match _current_stage:
+		0:
+			label = "COLD START"
+		1:
+			label = "RUSH"
+		2:
+			label = "CHAOS"
+		3:
+			label = "VOID"
+	var reward := int(tuning.stage_reward_coins + _current_stage * 8)
+	ui.show_stage(title + "\n" + label, "+%d COINS" % reward)
+	game_camera.shake(5.5 + _current_stage * 1.5, 0.16)
+	run_coins += reward
+	score_multiplier = minf(5.0, score_multiplier + tuning.stage_reward_score_bonus)
+	score_boost_time = maxf(score_boost_time, 4.0 + _current_stage)
+	_current_stage += 1
 
 func _mode_collectible_multiplier() -> float:
 	if selected_mode == 1:

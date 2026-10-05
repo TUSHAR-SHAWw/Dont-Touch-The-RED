@@ -124,27 +124,41 @@ func _spawn_random_pattern() -> void:
 		_pattern_player_pressure()
 		return
 	var patterns: Array[Callable] = [
-	_pattern_side_rect,
-	_pattern_strip,
-	_pattern_expand,
-	_pattern_spike_ball,
-	_pattern_zigzag,
-	_pattern_pinwheel
-]
+		_pattern_side_rect,
+		_pattern_strip,
+		_pattern_expand,
+		_pattern_spike_ball,
+		_pattern_zigzag,
+		_pattern_pinwheel
+	]
 	if elapsed >= tuning.idle_pressure_start:
 		patterns.append(_pattern_player_pressure)
 	if mode != 2:
 		patterns.append(_pattern_spikes)
-	if mode == 1 or (mode == 0 and elapsed >= 18.0) or (mode == 2 and elapsed >= 45.0):
-		patterns.append(_pattern_moving_wall)
-	var cross_time := 6.0 if mode == 1 else (30.0 if mode == 2 else 12.0)
-	var double_time := 12.0 if mode == 1 else (60.0 if mode == 2 else 24.0)
-	var corner_time := 24.0 if mode == 1 else (90.0 if mode == 2 else 40.0)
-	if elapsed >= cross_time:
+	var stage_1_time: float = tuning.stage_1_threshold
+	var stage_2_time: float = tuning.stage_2_threshold
+	var stage_3_time: float = tuning.stage_3_threshold
+	var stage_4_time: float = tuning.stage_4_threshold
+	if mode == 1:
+		stage_1_time *= 0.8
+		stage_2_time *= 0.85
+		stage_3_time *= 0.9
+		stage_4_time *= 0.95
+	elif mode == 2:
+		stage_1_time *= 1.2
+		stage_2_time *= 1.25
+		stage_3_time *= 1.3
+		stage_4_time *= 1.35
+	if elapsed >= stage_1_time:
 		patterns.append(_pattern_cross)
-	if elapsed >= double_time:
+		patterns.append(_pattern_moving_wall)
+	if elapsed >= stage_2_time:
 		patterns.append(_pattern_double_sides)
-	if elapsed >= corner_time:
+	if elapsed >= stage_3_time:
+		patterns.append(_pattern_corner_pair)
+	if elapsed >= stage_4_time:
+		patterns.append(_pattern_player_pressure)
+		patterns.append(_pattern_double_sides)
 		patterns.append(_pattern_corner_pair)
 	var shuffled := patterns.duplicate()
 	shuffled.shuffle()
