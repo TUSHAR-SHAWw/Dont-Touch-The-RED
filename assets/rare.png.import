@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dnxgjddiiw33w"
-path="res://.godot/imported/8ce88d49-0a0f-4098-8415-05b6c3c9863b.jpg-dc69a6998fc8824b9559af866e1ea009.ctex"
+uid="uid://bscel31apf1am"
+path="res://.godot/imported/rare.png-0576e51b2397b3e0adebb45dc028cf5a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/new coin power/8ce88d49-0a0f-4098-8415-05b6c3c9863b.jpg"
-dest_files=["res://.godot/imported/8ce88d49-0a0f-4098-8415-05b6c3c9863b.jpg-dc69a6998fc8824b9559af866e1ea009.ctex"]
+source_file="res://assets/rare.png"
+dest_files=["res://.godot/imported/rare.png-0576e51b2397b3e0adebb45dc028cf5a.ctex"]
 
 [params]
 

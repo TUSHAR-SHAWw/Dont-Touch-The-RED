@@ -15,7 +15,7 @@ extends Node
 @export var update_interval := 1.0
 
 var panel: Panel
-var label: RichLabel
+var label: RichTextLabel
 
 var elapsed := 0.0
 

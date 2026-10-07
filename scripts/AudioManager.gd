@@ -1,6 +1,34 @@
 extends Node
 
 ## Central audio hub. Assign any AudioStream assets to the exported slots in the inspector.
+##
+## Music plays on a "Music" bus and every sound effect on an "SFX" bus (both are
+## created automatically if the project doesn't define them). Volume sliders and
+## mute toggles act on the buses, so they also affect sounds that are already playing.
+## Sound effects use a small pool of voices, so rapid sounds overlap instead of cutting
+## each other off.
+
+## Matches the `kind` ints passed to play_powerup().
+enum PowerupKind { SHIELD, SCORE_BOOST, MAGNET }
+
+const MUSIC_BUS := "Music"
+const SFX_BUS := "SFX"
+
+const SILENT_DB := -40.0
+const FADE_OUT_TIME := 0.22
+const FADE_IN_TIME := 0.28
+
+const VOICE_COUNT := 12
+## Ignore the same sound being triggered again within this many ms (stops double-hits).
+const MIN_RETRIGGER_MSEC := 30
+
+const RARE_COIN_VALUE := 3
+const EPIC_COIN_VALUE := 8
+
+## Per-sound loudness trims (dB, relative to the SFX bus). Prefer normalising the
+## audio files themselves; these are here to match the old balance.
+const WARNING_BOOST_DB := 18.0
+const DEATH_BOOST_DB := 12.0
 
 @export_group("Music")
 @export var bg_music_stream: AudioStream
@@ -23,56 +51,149 @@ extends Node
 
 var music_enabled := true
 var sfx_enabled := true
+
 var _music_tween: Tween
+## The track the game last asked for, even if music was muted at the time.
+var _requested_music: AudioStream
+var _music_bus_idx := -1
+var _sfx_bus_idx := -1
+var _voices: Array[AudioStreamPlayer] = []
+var _steal_index := 0
+var _last_play_msec := {}
 
 @onready var music_player: AudioStreamPlayer = $MusicPlayer
-@onready var ui_player: AudioStreamPlayer = $UIPlayer
-@onready var warning_player: AudioStreamPlayer = $WarningPlayer
-@onready var danger_player: AudioStreamPlayer = $DangerPlayer
-@onready var death_player: AudioStreamPlayer = $DeathPlayer
-@onready var coin_player: AudioStreamPlayer = $CoinPlayer
-@onready var powerup_player: AudioStreamPlayer = $PowerupPlayer
+
 
 func _ready() -> void:
-	music_player.volume_db = music_volume_db
-	ui_player.volume_db = sfx_volume_db
-	warning_player.volume_db = sfx_volume_db + 30
-	danger_player.volume_db = sfx_volume_db
-	death_player.volume_db = sfx_volume_db + 20
-	coin_player.volume_db = sfx_volume_db
-	powerup_player.volume_db = sfx_volume_db
-	
+	# Keep fading and playing while the tree is paused (pause menu, etc.).
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+	_music_bus_idx = _ensure_bus(MUSIC_BUS)
+	_sfx_bus_idx = _ensure_bus(SFX_BUS)
+	_apply_bus_volumes()
+
+	# The bus carries the user's music volume; the player volume is only used for fades.
+	music_player.bus = MUSIC_BUS
+	music_player.volume_db = 0.0
+
+	for i in range(VOICE_COUNT):
+		var voice := AudioStreamPlayer.new()
+		voice.bus = SFX_BUS
+		add_child(voice)
+		_voices.append(voice)
+
+	_enable_loop(bg_music_stream)
+	_enable_loop(gameplay_music_stream)
 	play_background_music()
 
+
+# ---------------------------------------------------------------------------
+# Buses / volume
+# ---------------------------------------------------------------------------
+
+func _ensure_bus(bus_name: String) -> int:
+	var idx := AudioServer.get_bus_index(bus_name)
+	if idx == -1:
+		AudioServer.add_bus()
+		idx = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(idx, bus_name)
+		AudioServer.set_bus_send(idx, "Master")
+	return idx
+
+
+func _apply_bus_volumes() -> void:
+	print("[AudioManager] _apply_bus_volumes called - music_idx: ", _music_bus_idx, " sfx_idx: ", _sfx_bus_idx, " music_db: ", music_volume_db, " sfx_db: ", sfx_volume_db)
+	if _music_bus_idx >= 0:
+		var old_vol := AudioServer.get_bus_volume_db(_music_bus_idx)
+		AudioServer.set_bus_volume_db(_music_bus_idx, music_volume_db)
+		print("[AudioManager] Music bus volume: ", old_vol, " -> ", AudioServer.get_bus_volume_db(_music_bus_idx))
+	if _sfx_bus_idx >= 0:
+		var old_vol := AudioServer.get_bus_volume_db(_sfx_bus_idx)
+		AudioServer.set_bus_volume_db(_sfx_bus_idx, sfx_volume_db)
+		print("[AudioManager] SFX bus volume: ", old_vol, " -> ", AudioServer.get_bus_volume_db(_sfx_bus_idx))
+
+
+## For a settings slider.
+func set_music_volume_db(db: float) -> void:
+	print("[AudioManager] set_music_volume_db called with: ", db)
+	music_volume_db = db
+	_apply_bus_volumes()
+	print("[AudioManager] music_volume_db now: ", music_volume_db, ", music_bus_idx: ", _music_bus_idx)
+
+
+## For a settings slider.
+func set_sfx_volume_db(db: float) -> void:
+	print("[AudioManager] set_sfx_volume_db called with: ", db)
+	sfx_volume_db = db
+	_apply_bus_volumes()
+	print("[AudioManager] sfx_volume_db now: ", sfx_volume_db, ", sfx_bus_idx: ", _sfx_bus_idx)
+
+
+func _enable_loop(stream: AudioStream) -> void:
+	if stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	# WAV loops are best set in the import settings.
+
+
+# ---------------------------------------------------------------------------
+# Music
+# ---------------------------------------------------------------------------
+
 func play_background_music() -> void:
-	if bg_music_stream is AudioStreamMP3:
-		bg_music_stream.loop = true
 	_play_music(bg_music_stream)
 
 
 func play_gameplay_music() -> void:
-	if gameplay_music_stream is AudioStreamMP3:
-		gameplay_music_stream.loop = true
 	_play_music(gameplay_music_stream)
 
+
 func _play_music(stream: AudioStream) -> void:
-	if not music_enabled or not stream:
+	if not stream:
 		return
+	# Remember the request even while muted, so unmuting plays the right track.
+	_requested_music = stream
+	if not music_enabled:
+		return
+
 	if music_player.stream == stream:
+		# Already the current track: cancel any fade towards another one and bring it back.
+		_kill_music_tween()
 		music_player.stream_paused = false
 		if not music_player.playing:
+			music_player.volume_db = 0.0
 			music_player.play()
+		elif music_player.volume_db < -0.1:
+			_music_tween = _new_music_tween()
+			_music_tween.tween_property(music_player, "volume_db", 0.0, FADE_IN_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		return
+
+	_kill_music_tween()
+	_music_tween = _new_music_tween()
+	if music_player.playing:
+		_music_tween.tween_property(music_player, "volume_db", SILENT_DB, FADE_OUT_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_music_tween.tween_callback(_swap_music.bind(stream))
+	_music_tween.tween_property(music_player, "volume_db", 0.0, FADE_IN_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+
+func _swap_music(stream: AudioStream) -> void:
+	music_player.stream = stream
+	music_player.volume_db = SILENT_DB
+	music_player.stream_paused = false
+	music_player.play()
+
+
+func _new_music_tween() -> Tween:
+	var tween := create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	return tween
+
+
+func _kill_music_tween() -> void:
 	if _music_tween and _music_tween.is_valid():
 		_music_tween.kill()
-	_music_tween = create_tween()
-	_music_tween.tween_property(music_player, "volume_db", -40.0, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	_music_tween.tween_callback(func() -> void:
-		music_player.stream = stream
-		music_player.stream_paused = false
-		music_player.play()
-	)
-	_music_tween.tween_property(music_player, "volume_db", music_volume_db, 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
 
 func pause_background_music() -> void:
 	if music_player.stream == bg_music_stream and music_player.playing:
@@ -83,62 +204,99 @@ func resume_background_music() -> void:
 	if music_player.stream == bg_music_stream and music_player.stream_paused:
 		music_player.stream_paused = false
 
+
 func pause_gameplay_music() -> void:
 	if music_player.stream == gameplay_music_stream and music_player.playing:
 		music_player.stream_paused = true
+
 
 func resume_gameplay_music() -> void:
 	if music_player.stream == gameplay_music_stream and music_player.stream_paused:
 		music_player.stream_paused = false
 
-func play_ui() -> void:
-	_play(ui_player, ui_stream)
 
 func set_music_enabled(enabled: bool) -> void:
 	music_enabled = enabled
-	if music_enabled:
-		if music_player.stream and not music_player.playing:
-			music_player.play()
+	if enabled:
+		# Restore the last requested track, at full fade level.
+		music_player.volume_db = 0.0
+		_play_music(_requested_music)
 	else:
-		if _music_tween and _music_tween.is_valid():
-			_music_tween.kill()
+		_kill_music_tween()
 		music_player.stop()
+		music_player.volume_db = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Sound effects
+# ---------------------------------------------------------------------------
 
 func set_sfx_enabled(enabled: bool) -> void:
 	sfx_enabled = enabled
+	# Muting the bus also silences sounds that are already playing.
+	if _sfx_bus_idx >= 0:
+		AudioServer.set_bus_mute(_sfx_bus_idx, not enabled)
+
+
+func play_ui() -> void:
+	_play(ui_stream)
+
 
 func play_warning() -> void:
-	_play(warning_player, warning_stream)
+	_play(warning_stream, WARNING_BOOST_DB)
+
 
 func play_danger() -> void:
-	_play(danger_player, danger_stream)
+	_play(danger_stream)
+
 
 func play_death() -> void:
-	_play(death_player, death_stream)
+	_play(death_stream, DEATH_BOOST_DB)
+
 
 func play_coin(value: int) -> void:
 	var stream := coin_stream
-	if value >= 8 and epic_coin_stream:
+	if value >= EPIC_COIN_VALUE and epic_coin_stream:
 		stream = epic_coin_stream
-	elif value >= 3 and rare_coin_stream:
+	elif value >= RARE_COIN_VALUE and rare_coin_stream:
 		stream = rare_coin_stream
-	_play(coin_player, stream)
+	_play(stream)
+
 
 func play_powerup(kind: int) -> void:
 	var stream := powerup_stream
-	if kind == 0 and shield_stream:
+	if kind == PowerupKind.SHIELD and shield_stream:
 		stream = shield_stream
-	elif kind == 1 and score_boost_stream:
+	elif kind == PowerupKind.SCORE_BOOST and score_boost_stream:
 		stream = score_boost_stream
-	elif kind == 2 and magnet_stream:
+	elif kind == PowerupKind.MAGNET and magnet_stream:
 		stream = magnet_stream
-	_play(powerup_player, stream)
+	_play(stream)
 
-func play_sfx(stream: AudioStream) -> void:
-	_play(powerup_player, stream)
 
-func _play(player: AudioStreamPlayer, stream: AudioStream) -> void:
+func play_sfx(stream: AudioStream, boost_db := 0.0) -> void:
+	_play(stream, boost_db)
+
+
+func _play(stream: AudioStream, boost_db := 0.0) -> void:
 	if not stream or not sfx_enabled:
 		return
-	player.stream = stream
-	player.play()
+	var now := Time.get_ticks_msec()
+	if now - int(_last_play_msec.get(stream, -1000)) < MIN_RETRIGGER_MSEC:
+		return
+	_last_play_msec[stream] = now
+
+	var voice := _free_voice()
+	voice.stream = stream
+	voice.volume_db = boost_db
+	voice.play()
+
+
+## First idle voice, or the next one in round-robin order if all are busy.
+func _free_voice() -> AudioStreamPlayer:
+	for voice in _voices:
+		if not voice.playing:
+			return voice
+	var stolen := _voices[_steal_index]
+	_steal_index = (_steal_index + 1) % _voices.size()
+	return stolen

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cj6mmwvuj4lga"
-path="res://.godot/imported/5700_8_02.jpg-4aa7b29cf05908a7270fc3b8e4966717.ctex"
+uid="uid://btcn1yrm0kcts"
+path="res://.godot/imported/magnet.png-4430563963eeb7c78db06f45818edd6d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/new coin power/5700_8_02.jpg"
-dest_files=["res://.godot/imported/5700_8_02.jpg-4aa7b29cf05908a7270fc3b8e4966717.ctex"]
+source_file="res://assets/magnet.png"
+dest_files=["res://.godot/imported/magnet.png-4430563963eeb7c78db06f45818edd6d.ctex"]
 
 [params]
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dh01tjxkc26mu"
-path="res://.godot/imported/powerup_shield.svg-f90d0e466dc48805dbad25ed33b7d911.ctex"
+uid="uid://crr3047dbyile"
+path="res://.godot/imported/shield.png-46d74908b0ac118b50397d7021ae31f8.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/powerup_shield.svg"
-dest_files=["res://.godot/imported/powerup_shield.svg-f90d0e466dc48805dbad25ed33b7d911.ctex"]
+source_file="res://assets/shield.png"
+dest_files=["res://.godot/imported/shield.png-46d74908b0ac118b50397d7021ae31f8.ctex"]
 
 [params]
 
@@ -38,6 +38,3 @@ process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
 detect_3d/compress_to=1
-svg/scale=1.0
-editor/scale_with_editor_scale=false
-editor/convert_colors_with_editor_theme=false

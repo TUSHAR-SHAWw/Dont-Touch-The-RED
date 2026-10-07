@@ -4,7 +4,6 @@ extends Node2D
 ## best-score persistence. The DangerManager and UI are driven from here.
 
 enum State { MENU, PLAYING, GAME_OVER }
-
 const SAVE_PATH := "user://dttr_config.cfg"
 const BEST_KEY := "best_score"
 const COINS_KEY := "coins"
@@ -17,6 +16,8 @@ const SFX_ENABLED_KEY := "sfx_enabled"
 const SHAKE_ENABLED_KEY := "shake_enabled"
 const REDUCED_EFFECTS_KEY := "reduced_effects"
 const ITEM_INVENTORY_KEY := "item_inventory"
+const MUSIC_VOLUME_KEY := "music_volume"
+const SFX_VOLUME_KEY := "sfx_volume"
 const Coin := preload("res://scripts/Coin.gd")
 const Powerup := preload("res://scripts/Powerup.gd")
 const SkinCatalog := preload("res://scripts/SkinCatalog.gd")
@@ -27,6 +28,10 @@ const PowerupScene := preload("res://scenes/Powerup.tscn")
 ## allocates no new collectible nodes after the first few spawns.
 const COIN_POOL_LIMIT := 8
 const POWERUP_POOL_LIMIT := 3
+
+## Stage start times are scaled per mode: [Rush, Zen] factors for stages 1-4.
+const RUSH_STAGE_FACTORS := [0.8, 0.85, 0.9, 0.95]
+const ZEN_STAGE_FACTORS := [1.2, 1.25, 1.3, 1.35]
 
 var state := State.MENU
 var elapsed := 0.0
@@ -52,6 +57,8 @@ var music_enabled := true
 var sfx_enabled := true
 var shake_enabled := true
 var reduced_effects := false
+var music_volume_db := -12.0
+var sfx_volume_db := -6.0
 var is_paused := false
 var item_inventory: Array = [0, 0, 0]
 
@@ -63,6 +70,15 @@ var _current_scene: Node = null
 var _save_pending := false
 var _danger_rects: Array[Rect2] = []
 
+## True while the shop / skins / settings screen is open on top of the menu.
+var _overlay_open := false
+## True during the short loading delay in start_game().
+var _starting := false
+## Bumped when leaving to the menu so a pending start_game() can cancel itself.
+var _start_token := 0
+var _last_warning_frame := -1
+var _last_activation_frame := -1
+
 @onready var danger_manager := $DangerManager
 @onready var player := $Player
 @onready var ui := $UI
@@ -72,6 +88,7 @@ var _danger_rects: Array[Rect2] = []
 
 
 func _ready() -> void:
+	player.shield_handler = Callable(self, "_try_consume_shield")
 	audio.play_background_music()
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	$Arena.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -113,24 +130,33 @@ func _ready() -> void:
 	ui.shop_action.connect(_on_shop_action)
 	ui.item_use_requested.connect(_on_item_use_requested)
 	danger_manager.danger_spawned.connect(_on_danger_spawned)
+	player.died.connect(_on_player_died)
+	ui.volume_changed.connect(_on_volume_changed)
+	
 	ui.set_selected_mode(selected_mode)
 	ui.set_progression(coins, selected_skin, unlocked_skins, multiplier_level)
 	touch_controls = _load_touch_controls()
-	music_enabled = _load_setting(MUSIC_ENABLED_KEY, true)
-	sfx_enabled = _load_setting(SFX_ENABLED_KEY, true)
-	shake_enabled = _load_setting(SHAKE_ENABLED_KEY, true)
+	# The second argument is the key older versions saved under (see _on_setting_changed).
+	music_enabled = _load_setting(MUSIC_ENABLED_KEY, true, "music")
+	sfx_enabled = _load_setting(SFX_ENABLED_KEY, true, "sfx")
+	shake_enabled = _load_setting(SHAKE_ENABLED_KEY, true, "shake")
 	reduced_effects = _load_setting(REDUCED_EFFECTS_KEY, false)
+	music_volume_db = _load_volume(MUSIC_VOLUME_KEY, -12.0)
+	sfx_volume_db = _load_volume(SFX_VOLUME_KEY, -6.0)
 	item_inventory = _load_item_inventory()
 	player.set_touch_enabled(touch_controls)
 	ui.set_touch_controls(touch_controls)
-	ui.set_settings(music_enabled, sfx_enabled, shake_enabled, reduced_effects, touch_controls)
+	ui.set_settings(music_enabled, sfx_enabled, shake_enabled, reduced_effects, touch_controls, music_volume_db, sfx_volume_db)
 	ui.set_shop(coins, item_inventory)
 	ui.set_item_inventory(item_inventory)
 	ui.set_reduced_effects(reduced_effects)
 	audio.set_music_enabled(music_enabled)
 	audio.set_sfx_enabled(sfx_enabled)
+	audio.set_music_volume_db(music_volume_db)
+	audio.set_sfx_volume_db(sfx_volume_db)
 	game_camera.shake_enabled = shake_enabled
 	_enter_menu()
+
 
 func _process(delta: float) -> void:
 	if _save_pending:
@@ -163,6 +189,7 @@ func _process(delta: float) -> void:
 			score_boost_time = maxf(score_boost_time, 2.5)
 			_next_milestone += int(tuning.milestone_interval)
 
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_P:
 		if state == State.PLAYING and not is_paused:
@@ -179,16 +206,27 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_3:
 				_on_item_use_requested(2)
 	# Enter / Space start or restart instantly (buttons handle their own input,
-	# so this won't double-trigger while a button has focus).
+	# so this won't double-trigger while a button has focus). Ignored while a
+	# shop / skins / settings screen is open or a run is already loading.
 	if event.is_action_pressed("ui_accept"):
-		if state == State.MENU or state == State.GAME_OVER:
+		if (state == State.MENU or state == State.GAME_OVER) and not _overlay_open and not _starting:
 			start_game()
 
+
 func start_game() -> void:
+	if _starting:
+		return
+	_starting = true
+	_overlay_open = false
+	var token := _start_token
 	audio.play_gameplay_music()
 	audio.pause_background_music()
 	ui.show_loading("LOADING RUN")
 	await get_tree().create_timer(0.28).timeout
+	# Cancelled (e.g. back to the menu) while loading.
+	if token != _start_token:
+		return
+	_starting = false
 	elapsed = 0.0
 	score_progress = 0.0
 	score_multiplier = _base_multiplier()
@@ -196,6 +234,7 @@ func start_game() -> void:
 	coin_spawn_timer = tuning.coin_first_spawn_delay
 	powerup_spawn_timer = tuning.powerup_first_spawn_delay
 	shield_active = false
+	player.set_shield_visible(false)
 	score_boost_time = 0.0
 	magnet_time = 0.0
 	damage_grace_time = 0.0
@@ -216,7 +255,11 @@ func start_game() -> void:
 	_clear_coins()
 	_clear_powerups()
 
+
 func _enter_menu() -> void:
+	_start_token += 1
+	_starting = false
+	_overlay_open = false
 	get_tree().paused = false
 	is_paused = false
 	danger_manager.stop()
@@ -224,11 +267,14 @@ func _enter_menu() -> void:
 	_clear_powerups()
 	state = State.MENU
 	audio.play_background_music()
+	player.set_shield_visible(false)
 	ui.show_menu(best)
+
 
 func _on_mode_selected(new_mode: int) -> void:
 	selected_mode = new_mode
 	ui.set_selected_mode(selected_mode)
+
 
 func _on_control_mode_selected(enabled: bool) -> void:
 	touch_controls = enabled
@@ -236,14 +282,19 @@ func _on_control_mode_selected(enabled: bool) -> void:
 	ui.set_touch_controls(enabled)
 	_save_touch_controls()
 
+
 func _open_settings() -> void:
+	_overlay_open = true
 	ui.show_settings()
 
+
 func _close_settings() -> void:
+	_overlay_open = false
 	if is_paused:
 		ui.show_pause()
 	else:
 		ui.show_menu(best)
+
 
 func _pause_game() -> void:
 	if state != State.PLAYING or is_paused:
@@ -254,6 +305,7 @@ func _pause_game() -> void:
 	audio.pause_gameplay_music()
 	ui.show_pause()
 
+
 func _resume_game() -> void:
 	if not is_paused:
 		return
@@ -263,19 +315,27 @@ func _resume_game() -> void:
 	audio.pause_background_music()
 	ui.hide_pause()
 
+
 func _open_pause_settings() -> void:
+	_overlay_open = true
 	ui.show_settings()
+
 
 func _pause_to_menu() -> void:
 	get_tree().paused = false
 	is_paused = false
 	_enter_menu()
 
+
 func _open_shop() -> void:
+	_overlay_open = true
 	ui.show_shop()
 
+
 func _close_shop() -> void:
+	_overlay_open = false
 	ui.show_menu(best)
+
 
 func _on_shop_action(item: int, action: String) -> void:
 	var costs := [30, 60, 90]
@@ -290,8 +350,10 @@ func _on_shop_action(item: int, action: String) -> void:
 	_request_save()
 	ui.set_shop(coins, item_inventory)
 
+
 func _request_save() -> void:
 	_save_pending = true
+
 
 func _on_item_use_requested(item: int) -> void:
 	if state != State.PLAYING or item < 0 or item >= item_inventory.size() or item_inventory[item] <= 0:
@@ -301,6 +363,7 @@ func _on_item_use_requested(item: int) -> void:
 	match item:
 		0:
 			shield_active = true
+			player.set_shield_visible(true)
 			ui.show_powerup("SHIELD ACTIVE")
 		1:
 			score_boost_time = tuning.score_boost_duration
@@ -311,8 +374,10 @@ func _on_item_use_requested(item: int) -> void:
 	_request_save()
 	ui.set_item_inventory(item_inventory)
 
+
 func _quit_game() -> void:
 	get_tree().quit()
+
 
 func _reset_game_data() -> void:
 	best = 0
@@ -325,52 +390,86 @@ func _reset_game_data() -> void:
 	sfx_enabled = true
 	shake_enabled = true
 	reduced_effects = false
+	music_volume_db = -12.0
+	sfx_volume_db = -6.0
 	item_inventory = [0, 0, 0]
+	_overlay_open = false
 	_save_progress()
 	_save_touch_controls()
 	_save_setting(MUSIC_ENABLED_KEY, music_enabled)
 	_save_setting(SFX_ENABLED_KEY, sfx_enabled)
 	_save_setting(SHAKE_ENABLED_KEY, shake_enabled)
 	_save_setting(REDUCED_EFFECTS_KEY, reduced_effects)
+	_save_volume(MUSIC_VOLUME_KEY, music_volume_db)
+	_save_volume(SFX_VOLUME_KEY, sfx_volume_db)
 	player.set_skin(selected_skin)
 	player.set_touch_enabled(touch_controls)
 	audio.set_music_enabled(music_enabled)
 	audio.set_sfx_enabled(sfx_enabled)
+	audio.set_music_volume_db(music_volume_db)
+	audio.set_sfx_volume_db(sfx_volume_db)
 	game_camera.shake_enabled = shake_enabled
 	ui.set_touch_controls(touch_controls)
 	ui.set_reduced_effects(reduced_effects)
 	ui.set_progression(coins, selected_skin, unlocked_skins, multiplier_level)
 	ui.set_shop(coins, item_inventory)
 	ui.set_item_inventory(item_inventory)
-	ui.set_settings(music_enabled, sfx_enabled, shake_enabled, reduced_effects, touch_controls)
+	ui.set_settings(music_enabled, sfx_enabled, shake_enabled, reduced_effects, touch_controls, music_volume_db, sfx_volume_db)
 	ui.show_menu(best)
 
-func _on_setting_changed(name: String, value: bool) -> void:
-	match name:
+
+## `setting` is the UI's short name; each one is saved under its own constant,
+## the same key _ready() loads it from.
+func _on_setting_changed(setting: String, value: bool) -> void:
+	match setting:
 		"music":
 			music_enabled = value
 			audio.set_music_enabled(value)
+			_save_setting(MUSIC_ENABLED_KEY, value)
 		"sfx":
 			sfx_enabled = value
 			audio.set_sfx_enabled(value)
+			_save_setting(SFX_ENABLED_KEY, value)
 		"shake":
 			shake_enabled = value
 			game_camera.shake_enabled = value
+			_save_setting(SHAKE_ENABLED_KEY, value)
 		"reduced_effects":
 			reduced_effects = value
 			ui.set_reduced_effects(value)
+			_save_setting(REDUCED_EFFECTS_KEY, value)
 		"touch_controls":
 			touch_controls = value
 			player.set_touch_enabled(value)
 			ui.set_touch_controls(value)
-	_save_setting(name, value)
-	ui.set_settings(music_enabled, sfx_enabled, shake_enabled, reduced_effects, touch_controls)
+			_save_touch_controls()
+	ui.set_settings(music_enabled, sfx_enabled, shake_enabled, reduced_effects, touch_controls, music_volume_db, sfx_volume_db)
+
+
+func _on_volume_changed(name: String, value: float) -> void:
+	print("[Main] Received volume change: ", name, " = ", value)
+	match name:
+		"music_volume":
+			music_volume_db = value
+			print("[Main] Calling audio.set_music_volume_db(", value, ")")
+			audio.set_music_volume_db(value)
+			_save_volume(MUSIC_VOLUME_KEY, value)
+		"sfx_volume":
+			sfx_volume_db = value
+			print("[Main] Calling audio.set_sfx_volume_db(", value, ")")
+			audio.set_sfx_volume_db(value)
+			_save_volume(SFX_VOLUME_KEY, value)
+
 
 func _open_skin_menu() -> void:
+	_overlay_open = true
 	ui.show_skin_menu()
 
+
 func _close_skin_menu() -> void:
+	_overlay_open = false
 	ui.show_menu(best)
+
 
 func _on_skin_selected(skin: int) -> void:
 	if skin < 0 or skin >= SkinCatalog.count() or skin >= unlocked_skins.size():
@@ -385,6 +484,7 @@ func _on_skin_selected(skin: int) -> void:
 		player.set_skin(selected_skin)
 		ui.set_progression(coins, selected_skin, unlocked_skins, multiplier_level)
 
+
 func _on_multiplier_upgrade() -> void:
 	if multiplier_level >= 8:
 		return
@@ -396,6 +496,7 @@ func _on_multiplier_upgrade() -> void:
 	_request_save()
 	ui.set_progression(coins, selected_skin, unlocked_skins, multiplier_level)
 
+
 func _base_multiplier() -> float:
 	var mode_bonus := 1.0
 	if selected_mode == 1:
@@ -404,13 +505,25 @@ func _base_multiplier() -> float:
 		mode_bonus = tuning.zen_score_multiplier
 	return minf(5.0, (1.0 + multiplier_level * 0.5) * mode_bonus)
 
-func _trigger_stage_progression() -> void:
-	var stages := [
-		tuning.stage_1_threshold,
-		tuning.stage_2_threshold,
-		tuning.stage_3_threshold,
-		tuning.stage_4_threshold
+
+## Stage start times (seconds) for a mode. The DangerManager reads this too,
+## so the stage banners and the pattern unlocks always happen together.
+func get_stage_times(for_mode: int) -> Array:
+	var factors := [1.0, 1.0, 1.0, 1.0]
+	if for_mode == 1:
+		factors = RUSH_STAGE_FACTORS
+	elif for_mode == 2:
+		factors = ZEN_STAGE_FACTORS
+	return [
+		float(tuning.stage_1_threshold) * factors[0],
+		float(tuning.stage_2_threshold) * factors[1],
+		float(tuning.stage_3_threshold) * factors[2],
+		float(tuning.stage_4_threshold) * factors[3],
 	]
+
+
+func _trigger_stage_progression() -> void:
+	var stages := get_stage_times(selected_mode)
 	if _current_stage >= stages.size():
 		return
 	if elapsed < stages[_current_stage]:
@@ -436,6 +549,7 @@ func _trigger_stage_progression() -> void:
 	ui.show_powerup("SURVIVAL BOOST +%ds" % int(4.0 + _current_stage))
 	_current_stage += 1
 
+
 func _mode_collectible_multiplier() -> float:
 	if selected_mode == 1:
 		return 0.72
@@ -443,18 +557,16 @@ func _mode_collectible_multiplier() -> float:
 		return 1.25
 	return 1.0
 
+
 func _multiplier_upgrade_cost() -> int:
 	return 50 + multiplier_level * 75
+
 
 func _on_player_died() -> void:
 	if state != State.PLAYING:
 		return
 	audio.play_death()
 	state = State.GAME_OVER
-	
-	if elapsed >= _next_milestone:
-		ui.show_milestone(_next_milestone)
-		_next_milestone += 10
 	game_camera.shake(12.0, 0.35)
 	ui.flash_danger()
 	danger_manager.stop()
@@ -463,25 +575,41 @@ func _on_player_died() -> void:
 	var score := _score()
 	run_coins += int(score / 10.0)
 	coins += run_coins
-	_save_progress()
-	ui.set_progression(coins, selected_skin, unlocked_skins, multiplier_level)
 	if score > best:
 		best = score
-		_save_best()
+	_save_progress()  # saves best, coins and everything else in one write
+	ui.set_progression(coins, selected_skin, unlocked_skins, multiplier_level)
 	audio.play_background_music()
 	ui.show_game_over(score, best, run_coins, score_multiplier)
 
+
 func _on_danger_spawned(zone: Node) -> void:
 	if zone.has_signal("warning_started"):
-		zone.warning_started.connect(audio.play_warning)
+		zone.warning_started.connect(_on_danger_warning)
 	if zone.has_signal("activated"):
 		zone.activated.connect(_on_danger_activated)
 
+
+## A pattern spawns several zones at once; react to the whole pattern only once.
+func _on_danger_warning() -> void:
+	var frame := Engine.get_process_frames()
+	if frame == _last_warning_frame:
+		return
+	_last_warning_frame = frame
+	audio.play_warning()
+
+
 func _on_danger_activated() -> void:
-	if state == State.PLAYING:
-		game_camera.shake(4.0, 0.16)
-		ui.pulse_danger()
-		audio.play_danger()
+	if state != State.PLAYING:
+		return
+	var frame := Engine.get_physics_frames()
+	if frame == _last_activation_frame:
+		return
+	_last_activation_frame = frame
+	game_camera.shake(4.0, 0.16)
+	ui.pulse_danger()
+	audio.play_danger()
+
 
 func _try_consume_shield() -> bool:
 	if damage_grace_time > 0.0:
@@ -489,26 +617,47 @@ func _try_consume_shield() -> bool:
 	if not shield_active:
 		return false
 	shield_active = false
+	player.set_shield_visible(false)
 	damage_grace_time = tuning.shield_grace_duration
 	ui.show_powerup("SHIELD SAVED YOU")
 	return true
 
+
 func _active_multiplier() -> float:
 	return score_multiplier * (2.0 if score_boost_time > 0.0 else 1.0)
+
 
 func is_magnet_active() -> bool:
 	return magnet_time > 0.0
 
+
+# ---------------------------------------------------------------------------
+# Collectibles
+# ---------------------------------------------------------------------------
+
+## Collects the bounds of every danger that is warning or active, so pickups
+## never appear in something about to turn lethal.
+func _refresh_danger_rects() -> void:
+	_danger_rects.clear()
+	for child in danger_manager.get_children():
+		if not child.has_method("get_danger_rect"):
+			continue
+		var alive := false
+		if child.has_method("is_alive"):
+			alive = child.is_alive()
+		elif child.has_method("is_active"):
+			alive = child.is_active()
+		if alive:
+			_danger_rects.append(child.get_danger_rect())
+
+
 func _spawn_coin() -> void:
 	if _active_coins.size() >= tuning.max_active_coins:
 		return
-	_danger_rects.clear()
-	for child in danger_manager.get_children():
-		if child.has_method("is_active") and child.is_active() and child.has_method("get_danger_rect"):
-			_danger_rects.append(child.get_danger_rect())
+	_refresh_danger_rects()
 	for attempt in range(48):
-		var position := Vector2(randf_range(-360.0, 360.0), randf_range(-260.0, 260.0))
-		if _coin_position_is_safe(position):
+		var spawn_pos := Vector2(randf_range(-360.0, 360.0), randf_range(-260.0, 260.0))
+		if _coin_position_is_safe(spawn_pos):
 			var coin: Coin = _obtain_coin()
 			var roll := randf()
 			var kind := Coin.Kind.COMMON
@@ -517,23 +666,26 @@ func _spawn_coin() -> void:
 			elif roll > 0.72:
 				kind = Coin.Kind.RARE
 			coin.z_index = 10
-			coin.position = position
+			coin.position = spawn_pos
 			coin.activate(kind, tuning.common_coin_lifetime, tuning.rare_coin_lifetime, tuning.epic_coin_lifetime)
 			_active_coins.append(coin)
 			return
 
+
 func _spawn_powerup() -> void:
 	if _active_powerups.size() >= 1:
 		return
+	_refresh_danger_rects()
 	for attempt in range(12):
-		var position := Vector2(randf_range(-340.0, 340.0), randf_range(-240.0, 240.0))
-		if _coin_position_is_safe(position):
+		var spawn_pos := Vector2(randf_range(-340.0, 340.0), randf_range(-240.0, 240.0))
+		if _coin_position_is_safe(spawn_pos):
 			var powerup: Powerup = _obtain_powerup()
 			powerup.z_index = 10
-			powerup.position = position
+			powerup.position = spawn_pos
 			powerup.activate(randi_range(0, 2), tuning.powerup_lifetime)
 			_active_powerups.append(powerup)
 			return
+
 
 func _on_powerup_collected(kind: int) -> void:
 	game_camera.shake(3.0, 0.12)
@@ -541,6 +693,7 @@ func _on_powerup_collected(kind: int) -> void:
 	match kind:
 		Powerup.Kind.SHIELD:
 			shield_active = true
+			player.set_shield_visible(true)
 			ui.show_powerup("SHIELD READY")
 		Powerup.Kind.DOUBLE_SCORE:
 			score_boost_time = tuning.score_boost_duration
@@ -549,10 +702,12 @@ func _on_powerup_collected(kind: int) -> void:
 			magnet_time = tuning.magnet_duration
 			ui.show_powerup("COIN MAGNET - 8s")
 
+
 func _clear_powerups() -> void:
 	for powerup in _active_powerups.duplicate():
 		powerup.release()
 	_active_powerups.clear()
+
 
 func _coin_position_is_safe(world_position: Vector2) -> bool:
 	if is_instance_valid(player) and world_position.distance_to(player.position) < 36.0:
@@ -561,6 +716,7 @@ func _coin_position_is_safe(world_position: Vector2) -> bool:
 		if rect.grow(20.0).has_point(world_position):
 			return false
 	return true
+
 
 func _on_coin_collected(value: int) -> void:
 	if state != State.PLAYING:
@@ -572,10 +728,12 @@ func _on_coin_collected(value: int) -> void:
 	ui.show_pickup("+%d" % value, Color("#ffdc65"))
 	ui.update_timer(elapsed, int(score_progress), _active_multiplier(), coins + run_coins)
 
+
 func _clear_coins() -> void:
 	for coin in _active_coins.duplicate():
 		coin.release()
 	_active_coins.clear()
+
 
 func _obtain_coin() -> Coin:
 	while not _coin_pool.is_empty():
@@ -590,13 +748,16 @@ func _obtain_coin() -> Coin:
 	add_child(coin)
 	return coin
 
+
 func _on_coin_removed(coin: Coin) -> void:
 	if coin in _active_coins:
 		_active_coins.erase(coin)
 
+
 func _on_powerup_removed(powerup: Powerup) -> void:
 	if powerup in _active_powerups:
 		_active_powerups.erase(powerup)
+
 
 func _on_coin_recycled(coin: Coin) -> void:
 	if coin in _active_coins:
@@ -608,6 +769,7 @@ func _on_coin_recycled(coin: Coin) -> void:
 		return
 	_coin_pool.append(coin)
 
+
 func _on_powerup_recycled(powerup: Powerup) -> void:
 	if powerup in _active_powerups:
 		_active_powerups.erase(powerup)
@@ -617,6 +779,7 @@ func _on_powerup_recycled(powerup: Powerup) -> void:
 		powerup.queue_free()
 		return
 	_powerup_pool.append(powerup)
+
 
 func _obtain_powerup() -> Powerup:
 	while not _powerup_pool.is_empty():
@@ -631,79 +794,99 @@ func _obtain_powerup() -> Powerup:
 	add_child(powerup)
 	return powerup
 
+
 func _score() -> int:
 	return int(score_progress)
 
-func _load_best() -> int:
+
+# ---------------------------------------------------------------------------
+# Persistence
+# ---------------------------------------------------------------------------
+
+func _cfg_get(section: String, key: String, fallback: Variant) -> Variant:
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) == OK:
-		return maxi(0, int(cfg.get_value("meta", BEST_KEY, 0)))
-	return 0
+		return cfg.get_value(section, key, fallback)
+	return fallback
+
+
+func _cfg_set(section: String, key: String, value: Variant) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SAVE_PATH)
+	cfg.set_value(section, key, value)
+	cfg.save(SAVE_PATH)
+
+
+func _load_best() -> int:
+	return maxi(0, int(_cfg_get("meta", BEST_KEY, 0)))
+
 
 func _load_coins() -> int:
-	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
-		return maxi(0, int(cfg.get_value("meta", COINS_KEY, 0)))
-	return 0
+	return maxi(0, int(_cfg_get("meta", COINS_KEY, 0)))
+
 
 func _load_skin() -> int:
-	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
-		return int(cfg.get_value("meta", SKIN_KEY, 0))
-	return 0
+	return int(_cfg_get("meta", SKIN_KEY, 0))
+
+
+func _load_multiplier_level() -> int:
+	return maxi(0, int(_cfg_get("meta", MULTIPLIER_LEVEL_KEY, 0)))
+
 
 func _load_unlocked_skins() -> Array:
-	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
-		var saved_value: Variant = cfg.get_value("meta", UNLOCKED_SKINS_KEY, null)
-		if saved_value is Array:
-			var skins: Array = []
-			for i in range(SkinCatalog.count()):
-				skins.append(i < saved_value.size() and bool(saved_value[i]))
-			skins[0] = true
-			return skins
+	var saved_value: Variant = _cfg_get("meta", UNLOCKED_SKINS_KEY, null)
+	if saved_value is Array:
+		var skins: Array = []
+		for i in range(SkinCatalog.count()):
+			skins.append(i < saved_value.size() and bool(saved_value[i]))
+		skins[0] = true
+		return skins
 	return _default_unlocked_skins()
 
+
 func _load_touch_controls() -> bool:
-	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
-		return bool(cfg.get_value("meta", TOUCH_CONTROLS_KEY, _touch_device_detected()))
-	return _touch_device_detected()
+	return bool(_cfg_get("meta", TOUCH_CONTROLS_KEY, _touch_device_detected()))
+
 
 func _touch_device_detected() -> bool:
 	return OS.has_feature("mobile") or DisplayServer.is_touchscreen_available()
 
-func _load_setting(key: String, fallback: bool) -> bool:
-	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
-		return bool(cfg.get_value("settings", key, fallback))
-	return fallback
+
+## `legacy_key` is an older name this setting may have been saved under.
+func _load_setting(key: String, fallback: bool, legacy_key := "") -> bool:
+	var value: Variant = _cfg_get("settings", key, null)
+	if value == null and legacy_key != "":
+		value = _cfg_get("settings", legacy_key, null)
+	if value == null:
+		return fallback
+	return bool(value)
+
 
 func _save_setting(key: String, value: bool) -> void:
-	var cfg := ConfigFile.new()
-	cfg.load(SAVE_PATH)
-	cfg.set_value("settings", key, value)
-	cfg.save(SAVE_PATH)
+	_cfg_set("settings", key, value)
+
 
 func _save_touch_controls() -> void:
-	var cfg := ConfigFile.new()
-	cfg.load(SAVE_PATH)
-	cfg.set_value("meta", TOUCH_CONTROLS_KEY, touch_controls)
-	cfg.save(SAVE_PATH)
+	_cfg_set("meta", TOUCH_CONTROLS_KEY, touch_controls)
 
-func _load_multiplier_level() -> int:
-	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
-		return maxi(0, int(cfg.get_value("meta", MULTIPLIER_LEVEL_KEY, 0)))
-	return 0
+
+func _load_volume(key: String, fallback: float) -> float:
+	var value: Variant = _cfg_get("settings", key, null)
+	if value == null:
+		return fallback
+	return float(value)
+
+
+func _save_volume(key: String, value: float) -> void:
+	_cfg_set("settings", key, value)
+
 
 func _load_item_inventory() -> Array:
-	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) == OK:
-		var saved: Variant = cfg.get_value("meta", ITEM_INVENTORY_KEY, [0, 0, 0])
-		if saved is Array and saved.size() == 3:
-			return [maxi(0, int(saved[0])), maxi(0, int(saved[1])), maxi(0, int(saved[2]))]
+	var saved: Variant = _cfg_get("meta", ITEM_INVENTORY_KEY, [0, 0, 0])
+	if saved is Array and saved.size() == 3:
+		return [maxi(0, int(saved[0])), maxi(0, int(saved[1])), maxi(0, int(saved[2]))]
 	return [0, 0, 0]
+
 
 func _default_unlocked_skins() -> Array:
 	var skins: Array = []
@@ -711,11 +894,13 @@ func _default_unlocked_skins() -> Array:
 		skins.append(i == 0)
 	return skins
 
+
 func _skin_costs() -> Array:
 	var costs: Array = []
 	for skin in SkinCatalog.SKINS:
 		costs.append(int(skin.cost))
 	return costs
+
 
 func _save_progress() -> void:
 	var cfg := ConfigFile.new()
@@ -726,10 +911,6 @@ func _save_progress() -> void:
 	cfg.set_value("meta", UNLOCKED_SKINS_KEY, unlocked_skins)
 	cfg.set_value("meta", MULTIPLIER_LEVEL_KEY, multiplier_level)
 	cfg.set_value("meta", ITEM_INVENTORY_KEY, item_inventory)
-	cfg.save(SAVE_PATH)
-
-func _save_best() -> void:
-	var cfg := ConfigFile.new()
-	cfg.load(SAVE_PATH)
-	cfg.set_value("meta", BEST_KEY, best)
+	cfg.set_value("settings", MUSIC_VOLUME_KEY, music_volume_db)
+	cfg.set_value("settings", SFX_VOLUME_KEY, sfx_volume_db)
 	cfg.save(SAVE_PATH)
