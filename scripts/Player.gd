@@ -7,6 +7,9 @@ extends CharacterBody2D
 ## Emitted once when the player actually dies (not when a shield absorbs a hit).
 signal died
 
+## Emitted when the player slams into an arena wall at speed (for dust / shake).
+signal wall_hit(world_position: Vector2, strength: float)
+
 const SkinCatalog := preload("res://scripts/SkinCatalog.gd")
 
 ## All skin textures are 1:1 square. The sprite scale is derived from
@@ -21,6 +24,10 @@ const SHIELD_RING_COLOR := Color("#ffd166")
 const SHIELD_FX_COOLDOWN_MSEC := 300
 ## Mouse steering reaches full speed at this distance from the cursor.
 const MOUSE_FULL_SPEED_DISTANCE := 40.0
+## Walls only report an impact above this speed, and not more often than this.
+const WALL_HIT_MIN_SPEED := 160.0
+const WALL_HIT_COOLDOWN_MSEC := 140
+const REVIVE_RING_COLOR := Color("#3ddcff")
 
 ## Default bindings, only added if the project doesn't define these actions.
 const MOVE_ACTIONS := {
@@ -91,6 +98,8 @@ var _shield_visible := false
 var _invulnerable := false
 var _last_shield_fx_msec := -10000
 var _mouse_steering := false
+var _last_wall_hit_msec := -10000
+var _revive_ring := 1.0
 
 var _fx_tween: Tween
 var _flash_tween: Tween
@@ -219,7 +228,7 @@ func _process(delta: float) -> void:
 	_pulse_time += delta
 	_update_sprite(delta)
 
-	var animated := _shield_visible
+	var animated := _shield_visible or _revive_ring < 1.0
 	if not is_dead and not effects_reduced:
 		animated = animated or pulse_enabled or not _trail.is_empty()
 	if _dirty or animated:
@@ -368,14 +377,35 @@ func reset() -> void:
 	_trail.clear()
 	_spin = 0.0
 	_death_spin = 0.0
-	_pop = 1.0
+	_pop = 0.3
 	_stretch = 0.0
 	_shield_visible = false
 	_invulnerable = false
 	_mouse_steering = false
+	_revive_ring = 1.0
 	player_sprite.modulate = Color.WHITE
 	player_sprite.self_modulate.a = 1.0
 	set_skin(skin_index)
+	# Pop in at the start of a run.
+	_fx_tween = create_tween()
+	_fx_tween.tween_property(self, "_pop", 1.0, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_dirty = true
+
+
+## Brings the player back after dying (gem revive). Position is kept.
+func revive() -> void:
+	_kill_tweens()
+	is_dead = false
+	velocity = Vector2.ZERO
+	_trail.clear()
+	_death_spin = 0.0
+	_pop = 0.4
+	_revive_ring = 0.0
+	player_sprite.modulate = Color.WHITE
+	player_sprite.self_modulate.a = 1.0
+	_fx_tween = create_tween().set_parallel(true)
+	_fx_tween.tween_property(self, "_pop", 1.0, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_fx_tween.tween_property(self, "_revive_ring", 1.0, 0.7).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_dirty = true
 
 
@@ -384,11 +414,19 @@ func clamp_to_arena() -> void:
 	var max_pos := arena_rect.end - Vector2(radius, radius)
 	var clamped := position.clamp(min_pos, max_pos)
 	# Stop pushing into a wall instead of building up speed against it.
+	var impact := 0.0
 	if clamped.x != position.x:
+		impact = maxf(impact, absf(velocity.x))
 		velocity.x = 0.0
 	if clamped.y != position.y:
+		impact = maxf(impact, absf(velocity.y))
 		velocity.y = 0.0
 	position = clamped
+	if impact >= WALL_HIT_MIN_SPEED:
+		var now := Time.get_ticks_msec()
+		if now - _last_wall_hit_msec >= WALL_HIT_COOLDOWN_MSEC:
+			_last_wall_hit_msec = now
+			wall_hit.emit(global_position, clampf(impact / max_speed, 0.0, 1.0))
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +444,10 @@ func _draw() -> void:
 
 	if is_dead:
 		draw_arc(Vector2.ZERO, radius * 1.35, 0.0, TAU, 32, Color(1.0, 0.15, 0.15, 0.55), 2.0)
+
+	if _revive_ring < 1.0:
+		var ring_radius := lerpf(radius, radius * 5.0, _revive_ring)
+		draw_arc(Vector2.ZERO, ring_radius, 0.0, TAU, 48, Color(REVIVE_RING_COLOR, 1.0 - _revive_ring), 5.0 * (1.0 - _revive_ring) + 1.0)
 
 
 func _draw_trail(body_color: Color) -> void:

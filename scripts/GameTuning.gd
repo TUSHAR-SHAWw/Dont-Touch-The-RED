@@ -138,7 +138,7 @@ extends Node
 @export_group("Progression")
 
 ## Stage banners and rewards. New danger patterns unlock on their own schedule
-## (PATTERN_UNLOCKS in DangerSpawner.gd), spread between these times.
+## (PATTERN_UNLOCKS in DangerManager.gd), spread between these times.
 
 ## Stage 1: from 0 seconds until this time.
 @export var stage_1_threshold: float = 45.0
@@ -154,3 +154,28 @@ extends Node
 
 @export var stage_reward_coins: int = 12
 @export var stage_reward_score_bonus: float = 0.5
+
+
+# ============================================================
+# GEMS & REVIVE
+# ============================================================
+
+@export_group("Gems & Revive")
+
+## Gems spent per revive.
+@export var gem_revive_cost: int = 1
+
+## Maximum revives in a single run (stops endless gem/ad farming).
+@export var max_revives_per_run: int = 2
+
+## Seconds the player has to decide on the revive prompt.
+@export var revive_prompt_seconds: float = 6.0
+
+## Invulnerability after a revive (seconds).
+@export var revive_grace_duration: float = 2.5
+
+## Pause before the next danger pattern after a revive.
+@export var revive_pattern_delay: float = 1.6
+
+## Gems granted per completed rewarded ad.
+@export var ad_gem_reward: int = 1

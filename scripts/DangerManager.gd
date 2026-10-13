@@ -52,8 +52,14 @@ var mode := 0
 var _run_generation := 0
 @onready var tuning := get_node("../GameTuning")
 
-# Arena half-size (matches the Arena node, +-400/+-300 around the origin).
+# Arena half-size. Read from the Arena node in _ready (default 400/300).
 var _arena_half := Vector2(400, 300)
+
+
+func _ready() -> void:
+	var arena := get_node_or_null("../Arena")
+	if arena and arena.has_method("get_bounds"):
+		_arena_half = arena.get_bounds().size / 2.0
 
 
 func start(p: Node2D, selected_mode := 0) -> void:
@@ -80,9 +86,35 @@ func stop() -> void:
 	_run_generation += 1
 	running = false
 	elapsed = 0.0
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	for child in get_children():
 		if child is DangerZone or child is SpikeBall:
 			child.queue_free()
+
+
+## Freezes everything in place (used while the revive prompt is open).
+## Hazards stay visible but stop moving, and no new patterns spawn.
+func suspend() -> void:
+	_run_generation += 1
+	running = false
+	process_mode = Node.PROCESS_MODE_DISABLED
+
+
+## Continues a suspended run: all hazards fade out and spawning restarts
+## after `extra_delay` seconds. The difficulty clock keeps its value.
+func resume(extra_delay := 1.5) -> void:
+	process_mode = Node.PROCESS_MODE_PAUSABLE
+	clear_hazards()
+	_run_generation += 1
+	running = true
+	_schedule(_run_generation, extra_delay)
+
+
+## Fades out every hazard that is currently alive.
+func clear_hazards() -> void:
+	for child in get_children():
+		if (child is DangerZone or child is SpikeBall) and child.has_method("dismiss"):
+			child.dismiss()
 
 
 func _process(delta: float) -> void:
@@ -90,7 +122,11 @@ func _process(delta: float) -> void:
 		elapsed += delta
 
 
-func _schedule(generation: int) -> void:
+func _schedule(generation: int, initial_delay := 0.0) -> void:
+	if initial_delay > 0.0:
+		await get_tree().create_timer(initial_delay, false).timeout
+		if not running or generation != _run_generation:
+			return
 	while running and generation == _run_generation:
 		var interval := maxf(tuning.danger_min_spawn_interval, spawn_interval - elapsed * tuning.danger_spawn_acceleration)
 		if mode == 1:
@@ -102,7 +138,7 @@ func _schedule(generation: int) -> void:
 
 
 func _spawn_random_pattern() -> void:
-	var idle = is_instance_valid(player) and player.velocity.length() < 10.0
+	var idle: bool = is_instance_valid(player) and player.velocity.length() < 10.0
 	if elapsed >= tuning.idle_pressure_start and idle:
 		_pattern_player_pressure()
 		return
@@ -454,7 +490,7 @@ func _pattern_bombs() -> bool:
 	var player_pos := player.global_position if has_player else Vector2.ZERO
 
 	if has_player:
-		spots.append(_clamp_point(player_pos + player.velocity * warning_time * 0.6, 70.0))
+		spots.append(_clamp_point(player_pos + player.velocity * _current_warning() * 0.6, 70.0))
 		radii.append(70.0)
 
 	var attempts := 0
@@ -488,7 +524,7 @@ func _pattern_bombs() -> bool:
 func _pattern_laser_snipe() -> bool:
 	if not is_instance_valid(player):
 		return false
-	var aim := _clamp_point(player.global_position + player.velocity * warning_time * 0.4, 20.0)
+	var aim := _clamp_point(player.global_position + player.velocity * _current_warning() * 0.4, 20.0)
 	var choice := randi_range(0, 2)  # 0 = row, 1 = column, 2 = both
 	var rects: Array[Rect2] = []
 	if choice != 1:

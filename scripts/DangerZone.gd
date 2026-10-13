@@ -153,6 +153,12 @@ func _physics_process(delta: float) -> void:
 		queue_redraw()
 
 
+## Ends the zone immediately with the normal fade-out (used after a revive).
+func dismiss() -> void:
+	if phase != Phase.DONE:
+		_finish()
+
+
 func _activate() -> void:
 	phase = Phase.ACTIVE
 	_phase_time = 0.0  # from here on _phase_time is time since activation

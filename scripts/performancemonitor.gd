@@ -30,14 +30,14 @@ var _version_text := ""
 
 
 func _ready() -> void:
-	# The performance overlay is a developer tool. Never show it in an
-	# exported build — reviewers would judge the game as unpolished.
-	# In the editor we still want it visible for debugging.
-	if not Engine.is_editor_hint():
+	if not OS.is_debug_build():
 		enabled = false
+
 	if not enabled:
 		return
+
 	_create_panel()
+	print("Performance Monitor initialized!")
 
 
 func _process(delta: float) -> void:

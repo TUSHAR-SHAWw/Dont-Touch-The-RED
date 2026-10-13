@@ -1,6 +1,6 @@
 extends Area2D
 
-signal collected(kind)
+signal collected(kind, world_pos)
 signal removed(powerup)
 signal recycled(powerup)
 
@@ -28,6 +28,9 @@ var _collider: CollisionShape2D
 
 
 func _ready() -> void:
+	# Powerups live under Main, which keeps running while paused. Without this
+	# a paused powerup kept counting down and could expire behind the menu.
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 	_main = get_tree().current_scene
 	_collider = get_node_or_null("CollisionShape2D")
 
@@ -91,6 +94,7 @@ func activate(new_kind: int, new_lifetime := 12.0) -> void:
 	if is_instance_valid(visual):
 		_set_visual_scale()
 		visual.rotation = 0.0
+		visual.self_modulate = Color.WHITE
 
 	rotation = 0.0
 
@@ -135,6 +139,10 @@ func _process(delta: float) -> void:
 	)
 
 	visual.rotation = sin(_time * 2.0) * 0.08
+	# Blink shortly before disappearing, like coins do.
+	var blinking := lifetime - _time < 2.0 and int(_time * 10.0) % 2 == 0
+	visual.self_modulate.a = 0.35 if blinking else 1.0
+	queue_redraw()
 
 
 func _on_body_entered(body: Node) -> void:
@@ -146,7 +154,7 @@ func _on_body_entered(body: Node) -> void:
 	set_deferred("monitoring", false)
 
 	removed.emit(self)
-	collected.emit(kind)
+	collected.emit(kind, global_position)
 
 	_kill_tween()
 
@@ -204,6 +212,15 @@ func _kill_tween() -> void:
 		_tween.kill()
 
 	_tween = null
+
+
+const HALO_COLORS := [Color(0.45, 0.9, 0.6, 0.22), Color(1.0, 0.8, 0.3, 0.22), Color(0.45, 0.78, 1.0, 0.22)]
+
+
+func _draw() -> void:
+	var pulse := 0.5 + 0.5 * sin(_time * 4.0)
+	draw_circle(Vector2.ZERO, visual_size.x * (0.6 + 0.08 * pulse), HALO_COLORS[kind])
+	draw_arc(Vector2.ZERO, visual_size.x * 0.62, 0.0, TAU, 28, Color(1, 1, 1, 0.25 + 0.2 * pulse), 2.0)
 
 
 func _apply_visual() -> void:

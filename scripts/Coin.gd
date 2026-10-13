@@ -1,6 +1,7 @@
 extends Area2D
 
-signal collected(value)
+## `world_pos` lets the game spawn effects exactly where the coin was.
+signal collected(value, world_pos)
 signal removed(coin)
 signal recycled(coin)
 
@@ -218,7 +219,7 @@ func _on_body_entered(body: Node) -> void:
 	set_deferred("monitoring", false)
 
 	removed.emit(self)
-	collected.emit(value)
+	collected.emit(value, global_position)
 
 	_kill_tween()
 	visual.self_modulate.a = 1.0
@@ -268,9 +269,18 @@ func _kill_tween() -> void:
 	_tween = null
 
 
+const HALO_COLORS := [Color(1.0, 0.85, 0.3, 0.16), Color(0.45, 0.8, 1.0, 0.2), Color(0.85, 0.5, 1.0, 0.24)]
+
+
+## Soft glow behind the sprite so pickups read clearly on the light floor.
+func _draw() -> void:
+	draw_circle(Vector2.ZERO, visual_size.x * 0.62, HALO_COLORS[kind])
+
+
 func _apply_visual() -> void:
 	if not is_instance_valid(visual):
 		return
+	queue_redraw()
 
 	match kind:
 		Kind.RARE:

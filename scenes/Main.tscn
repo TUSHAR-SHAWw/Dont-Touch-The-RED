@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://bqweyk4l8jjom" path="res://scenes/Player.tscn" id="3_player_scene"]
 [ext_resource type="Script" uid="uid://cv2icn8frvlt4" path="res://scripts/DangerManager.gd" id="4_danger"]
 [ext_resource type="Script" uid="uid://5pfnex2hmc6" path="res://scripts/UIManager.gd" id="5_ui"]
-[ext_resource type="Script" uid="uid://c66mynr7wpfwl" path="res://scripts/GameCamera.gd" id="6_camera"]
+[ext_resource type="Script" uid="uid://h3la7i40eswb" path="res://scripts/GameCamera.gd" id="6_camera"]
 [ext_resource type="Script" uid="uid://cctxb3vbx18qv" path="res://scripts/AudioManager.gd" id="7_audio"]
 [ext_resource type="AudioStream" uid="uid://x82ouh61q0us" path="res://assets/sounds/music/game-music-loop-6-144641.mp3" id="7_bby8w"]
 [ext_resource type="AudioStream" uid="uid://c0ja26o5w67mh" path="res://assets/sounds/music/game-start-music-loop.mp3" id="7_l1wex"]
@@ -77,3 +77,7 @@ script = ExtResource("5_ui")
 
 [node name="Performance Monitor" type="Node" parent="." unique_id=769725138]
 script = ExtResource("21_1iba3")
+enabled = null
+panel_width = null
+margin = null
+update_interval = null

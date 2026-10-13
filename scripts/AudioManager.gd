@@ -102,31 +102,24 @@ func _ensure_bus(bus_name: String) -> int:
 
 
 func _apply_bus_volumes() -> void:
-	print("[AudioManager] _apply_bus_volumes called - music_idx: ", _music_bus_idx, " sfx_idx: ", _sfx_bus_idx, " music_db: ", music_volume_db, " sfx_db: ", sfx_volume_db)
 	if _music_bus_idx >= 0:
-		var old_vol := AudioServer.get_bus_volume_db(_music_bus_idx)
 		AudioServer.set_bus_volume_db(_music_bus_idx, music_volume_db)
-		print("[AudioManager] Music bus volume: ", old_vol, " -> ", AudioServer.get_bus_volume_db(_music_bus_idx))
 	if _sfx_bus_idx >= 0:
-		var old_vol := AudioServer.get_bus_volume_db(_sfx_bus_idx)
 		AudioServer.set_bus_volume_db(_sfx_bus_idx, sfx_volume_db)
-		print("[AudioManager] SFX bus volume: ", old_vol, " -> ", AudioServer.get_bus_volume_db(_sfx_bus_idx))
+		# The slider's lowest value means silent, not just very quiet.
+		AudioServer.set_bus_mute(_sfx_bus_idx, not sfx_enabled or sfx_volume_db <= SILENT_DB + 0.5)
 
 
 ## For a settings slider.
 func set_music_volume_db(db: float) -> void:
-	print("[AudioManager] set_music_volume_db called with: ", db)
 	music_volume_db = db
 	_apply_bus_volumes()
-	print("[AudioManager] music_volume_db now: ", music_volume_db, ", music_bus_idx: ", _music_bus_idx)
 
 
 ## For a settings slider.
 func set_sfx_volume_db(db: float) -> void:
-	print("[AudioManager] set_sfx_volume_db called with: ", db)
 	sfx_volume_db = db
 	_apply_bus_volumes()
-	print("[AudioManager] sfx_volume_db now: ", sfx_volume_db, ", sfx_bus_idx: ", _sfx_bus_idx)
 
 
 func _enable_loop(stream: AudioStream) -> void:
@@ -234,8 +227,7 @@ func set_music_enabled(enabled: bool) -> void:
 func set_sfx_enabled(enabled: bool) -> void:
 	sfx_enabled = enabled
 	# Muting the bus also silences sounds that are already playing.
-	if _sfx_bus_idx >= 0:
-		AudioServer.set_bus_mute(_sfx_bus_idx, not enabled)
+	_apply_bus_volumes()
 
 
 func play_ui() -> void:
@@ -254,13 +246,13 @@ func play_death() -> void:
 	_play(death_stream, DEATH_BOOST_DB)
 
 
-func play_coin(value: int) -> void:
+func play_coin(value: int, pitch := 1.0) -> void:
 	var stream := coin_stream
 	if value >= EPIC_COIN_VALUE and epic_coin_stream:
 		stream = epic_coin_stream
 	elif value >= RARE_COIN_VALUE and rare_coin_stream:
 		stream = rare_coin_stream
-	_play(stream)
+	_play(stream, 0.0, pitch)
 
 
 func play_powerup(kind: int) -> void:
@@ -274,11 +266,28 @@ func play_powerup(kind: int) -> void:
 	_play(stream)
 
 
+## Bright pickup sound for gems (reuses the epic coin sample, pitched up).
+func play_gem() -> void:
+	_play(epic_coin_stream if epic_coin_stream else coin_stream, 0.0, 1.35)
+
+
+func play_revive() -> void:
+	_play(score_boost_stream if score_boost_stream else powerup_stream)
+
+
+func play_purchase() -> void:
+	_play(rare_coin_stream if rare_coin_stream else coin_stream, 0.0, 0.9)
+
+
+func play_error() -> void:
+	_play(ui_stream, 0.0, 0.6)
+
+
 func play_sfx(stream: AudioStream, boost_db := 0.0) -> void:
 	_play(stream, boost_db)
 
 
-func _play(stream: AudioStream, boost_db := 0.0) -> void:
+func _play(stream: AudioStream, boost_db := 0.0, pitch := 1.0) -> void:
 	if not stream or not sfx_enabled:
 		return
 	var now := Time.get_ticks_msec()
@@ -289,6 +298,7 @@ func _play(stream: AudioStream, boost_db := 0.0) -> void:
 	var voice := _free_voice()
 	voice.stream = stream
 	voice.volume_db = boost_db
+	voice.pitch_scale = pitch
 	voice.play()
 
 
