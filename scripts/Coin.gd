@@ -6,6 +6,16 @@ signal recycled(coin)
 
 enum Kind { COMMON, RARE, EPIC }
 
+## Coin value per Kind (index = Kind). AudioManager's rare/epic thresholds
+## (3 and 8) are based on these numbers.
+const VALUES := [1, 3, 8]
+## Seconds before expiry during which the coin blinks.
+const BLINK_TIME := 2.0
+const BLINK_RATE := 10.0
+const SPAWN_POP_TIME := 0.18
+const MAGNET_SPEED := 240.0
+const BOB_HEIGHT := 4.0
+
 ## Fixed visual size in world pixels.
 ## Texture resolution does NOT affect the displayed size.
 @export var visual_size := Vector2(50.0, 50.0)
@@ -31,10 +41,19 @@ var _collider: CollisionShape2D
 
 
 func _ready() -> void:
-	# Smooth filtering.
-	visual.texture_filter = 1  # CanvasItem.LINEAR
+	# Coins live under Game, which keeps running while paused. Without this a
+	# paused coin keeps counting down and can expire behind the pause menu.
+	process_mode = Node.PROCESS_MODE_PAUSABLE
 
-	_main = get_tree().current_scene
+	# Smooth filtering (the textures are scaled down a lot, so use mipmaps).
+	visual.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+
+	# Coins are children of Game, so ask the parent rather than the root scene.
+	var parent := get_parent()
+	if parent and parent.has_method("is_magnet_active"):
+		_main = parent
+	else:
+		_main = get_tree().current_scene
 	_magnet_supported = _main != null and _main.has_method("is_magnet_active")
 
 	_collider = get_node_or_null("CollisionShape2D")
@@ -52,30 +71,23 @@ func _ready() -> void:
 	_apply_visual()
 
 
+## Scale that fits the current texture inside visual_size (keeps aspect ratio).
+func _fit_scale() -> Vector2:
+	if not is_instance_valid(visual) or visual.texture == null:
+		return Vector2.ONE
+
+	var texture_size := Vector2(visual.texture.get_width(), visual.texture.get_height())
+	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
+		return Vector2.ONE
+
+	return Vector2.ONE * minf(visual_size.x / texture_size.x, visual_size.y / texture_size.y)
+
+
 ## Sets the coin sprite to a fixed visual size regardless
 ## of the source texture's resolution.
 func _set_visual_scale() -> void:
-	if not is_instance_valid(visual):
-		return
-
-	if visual.texture == null:
-		return
-
-	var texture_size := Vector2(
-		visual.texture.get_width(),
-		visual.texture.get_height()
-	)
-
-	if texture_size.x <= 0.0 or texture_size.y <= 0.0:
-		return
-
-	# Preserve aspect ratio while fitting inside visual_size.
-	var scale_factor = min(
-		visual_size.x / texture_size.x,
-		visual_size.y / texture_size.y
-	)
-
-	visual.scale = Vector2.ONE * scale_factor
+	if is_instance_valid(visual) and visual.texture != null:
+		visual.scale = _fit_scale()
 
 
 ## Arm a pooled coin for a fresh spawn.
@@ -87,12 +99,7 @@ func activate(
 	epic_lifetime := 15.0
 ) -> void:
 
-	setup(
-		new_kind,
-		common_lifetime,
-		rare_lifetime,
-		epic_lifetime
-	)
+	setup(new_kind, common_lifetime, rare_lifetime, epic_lifetime)
 
 	_time = 0.0
 	_collected = false
@@ -102,16 +109,18 @@ func activate(
 	_kill_tween()
 
 	modulate = Color.WHITE
-
-	# Reset Area2D scale.
+	# Reset Area2D scale and rotation.
 	scale = Vector2.ONE
-
-	# Reset visual scale based on the actual texture.
-	if is_instance_valid(visual):
-		_set_visual_scale()
-		visual.rotation = 0.0
-
 	rotation = 0.0
+
+	if is_instance_valid(visual):
+		visual.rotation = 0.0
+		visual.self_modulate = Color.WHITE
+		# Pop in from a small size instead of appearing instantly.
+		var target := _fit_scale()
+		visual.scale = target * 0.2
+		_tween = create_tween()
+		_tween.tween_property(visual, "scale", target, SPAWN_POP_TIME).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 	visible = true
 	monitoring = true
@@ -142,18 +151,14 @@ func setup(
 ) -> void:
 
 	kind = clampi(new_kind, 0, 2)
+	value = VALUES[kind]
 
 	match kind:
 		Kind.RARE:
-			value = 3
 			lifetime = rare_lifetime
-
 		Kind.EPIC:
-			value = 8
 			lifetime = epic_lifetime
-
 		_:
-			value = 1
 			lifetime = common_lifetime
 
 	_apply_visual()
@@ -166,15 +171,21 @@ func _process(delta: float) -> void:
 		_expire()
 		return
 
+	var bob := sin(_time * 3.0) * BOB_HEIGHT
 	if _magnet_pull_active():
-		global_position = global_position.move_toward(
-			_player.global_position,
-			240.0 * delta
-		)
+		global_position = global_position.move_toward(_player.global_position, MAGNET_SPEED * delta)
+		# Keep the bobbing baseline under the coin, so it doesn't snap back
+		# to where it spawned when the magnet runs out.
+		_origin = Vector2(position.x, position.y - bob)
 	else:
-		position.y = _origin.y + sin(_time * 3.0) * 4.0
+		position.y = _origin.y + bob
 
 	visual.rotation = sin(_time * 2.5) * 0.12
+
+	# Blink shortly before disappearing (self_modulate, so it never fights
+	# the fade-out used on collection).
+	var blinking := lifetime - _time < BLINK_TIME and int(_time * BLINK_RATE) % 2 == 0
+	visual.self_modulate.a = 0.35 if blinking else 1.0
 
 
 func _magnet_pull_active() -> bool:
@@ -185,7 +196,7 @@ func _magnet_pull_active() -> bool:
 		return false
 
 	if not is_instance_valid(_player):
-		_player = _main.get_node_or_null("Player")
+		_player = get_tree().get_first_node_in_group("player") as Node2D
 
 	return is_instance_valid(_player)
 
@@ -210,6 +221,7 @@ func _on_body_entered(body: Node) -> void:
 	collected.emit(value)
 
 	_kill_tween()
+	visual.self_modulate.a = 1.0
 
 	# Scale only the visual for the collection effect.
 	_tween = create_tween().set_parallel(true)
@@ -217,7 +229,7 @@ func _on_body_entered(body: Node) -> void:
 	_tween.tween_property(
 		visual,
 		"scale",
-		visual.scale * 1.65,
+		_fit_scale() * 1.65,
 		0.16
 	).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 

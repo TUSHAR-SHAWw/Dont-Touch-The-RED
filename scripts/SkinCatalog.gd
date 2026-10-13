@@ -1,138 +1,82 @@
 extends RefCounted
 
-const SKIN_PATH := "res://assets/f_skins/"
+## Skin catalog. To add or reorder a skin, edit ENTRIES only: every other list
+## (SKINS, SKIN_NAMES, COSTS, ...) is built from it, so they can never drift apart.
+##
+## Textures are preloaded on purpose so Godot includes them in Web exports.
+## The returned skin dictionaries are shared, so treat them as read-only.
 
-## All skin textures are 1:1 square. This is the nominal source texture
-## size in pixels. The Player script derives its sprite scale from the
-## actual loaded texture size, so this constant is only a fallback for
-## the brief moment before the texture is fully loaded.
-const SKIN_TEXTURE_SIZE := 185.0
-
+## Used when the catalog is empty or an entry is broken.
 const DEFAULT_SKIN := {
-	"name": "Red",
+	"name": "RED",
 	"cost": 0,
-	"texture": "res://assets/f_skins/red.png",
+	"texture": "res://assets/skins/red.png",
 	"body": Color("#e02323"),
-	"highlight": Color("#ffb3a7"),
+	"highlight": Color("#ff8b7a"),
 }
 
-# Explicit texture references.
-# These are intentionally preloaded so Godot includes them
-# in Web exports.
-const SKIN_TEXTURES := [
-	preload("res://assets/f_skins/red.png"),
-	preload("res://assets/f_skins/blue.png"),
-	preload("res://assets/f_skins/clock.png"),
-	preload("res://assets/f_skins/compus.png"),
-	preload("res://assets/f_skins/atom.png"),
-	preload("res://assets/f_skins/forest.png"),
-	preload("res://assets/f_skins/galaxy.png"),
-	preload("res://assets/f_skins/gear.png"),
-	preload("res://assets/f_skins/lock.png"),
-	preload("res://assets/f_skins/dragon.png"),
-	preload("res://assets/f_skins/molten.png"),
-	preload("res://assets/f_skins/robot.png"),
-	preload("res://assets/f_skins/rune.png"),
-	preload("res://assets/f_skins/magma.png"),
-	preload("res://assets/f_skins/sunray.png"),
-	preload("res://assets/f_skins/plasma.png"),
-	preload("res://assets/f_skins/void.png"),
-	preload("res://assets/f_skins/diamond.png"),
+
+## One entry per skin; the array index is the skin id used everywhere else.
+## `body` tints the motion trail, `highlight` tints the pulse ring. Both are
+## chosen to match what the skin's name suggests.
+const ENTRIES := [
+	{"name": "RED", "cost": 0, "texture": preload("res://assets/skins/red.png"),
+		"body": Color("#e02323"), "highlight": Color("#ff8b7a")},
+
+	{"name": "BASEBALL", "cost": 50, "texture": preload("res://assets/skins/base-ball.png"),
+		"body": Color("#f5f0df"), "highlight": Color("#ffffff")},
+
+	{"name": "BASKETBALL", "cost": 75, "texture": preload("res://assets/skins/basket-old.png"),
+		"body": Color("#d97706"), "highlight": Color("#fed7aa")},
+
+	{"name": "BASKETBALL PRO", "cost": 100, "texture": preload("res://assets/skins/basketball.png"),
+		"body": Color("#ea580c"), "highlight": Color("#fdba74")},
+
+	{"name": "FOOTBALL", "cost": 150, "texture": preload("res://assets/skins/footbaall.png"),
+		"body": Color("#78350f"), "highlight": Color("#d6a77a")},
+
+	{"name": "VOLLEYBALL", "cost": 200, "texture": preload("res://assets/skins/volley-ball.png"),
+		"body": Color("#f8fafc"), "highlight": Color("#dbeafe")},
+
+	{"name": "TENNIS BALL", "cost": 250, "texture": preload("res://assets/skins/tennis-ball.png"),
+		"body": Color("#bef264"), "highlight": Color("#ecfccb")},
+
+	{"name": "PX FOOTBALL", "cost": 350, "texture": preload("res://assets/skins/PXfootball.png"),
+		"body": Color("#16a34a"), "highlight": Color("#86efac")},
+
+	{"name": "EMOJI", "cost": 500, "texture": preload("res://assets/skins/emoji.png"),
+		"body": Color("#facc15"), "highlight": Color("#fef08a")},
+
+	{"name": "DONUT", "cost": 650, "texture": preload("res://assets/skins/dounut.png"),
+		"body": Color("#ec4899"), "highlight": Color("#fbcfe8")},
+
+	{"name": "PUMPKIN", "cost": 800, "texture": preload("res://assets/skins/pumpkin.png"),
+		"body": Color("#f97316"), "highlight": Color("#fdba74")},
+
+	{"name": "8 BALL", "cost": 1000, "texture": preload("res://assets/skins/8ball.png"),
+		"body": Color("#171717"), "highlight": Color("#737373")},
+
+	{"name": "BOMB", "cost": 1250, "texture": preload("res://assets/skins/bomb.png"),
+		"body": Color("#292524"), "highlight": Color("#a8a29e")},
+
+	{"name": "GHOST", "cost": 1500, "texture": preload("res://assets/skins/ghost.png"),
+		"body": Color("#cbd5e1"), "highlight": Color("#ffffff")},
+
+	{"name": "MAGMA", "cost": 2000, "texture": preload("res://assets/skins/magma.png"),
+		"body": Color("#7f1d1d"), "highlight": Color("#ff7a3d")},
+
+	{"name": "DEATH STAR", "cost": 3000, "texture": preload("res://assets/skins/DeathStar.png"),
+		"body": Color("#334155"), "highlight": Color("#94a3b8")}
 ]
 
-# Costs are kept separately.
-# The index must match the skin index.
-const COSTS := [
-	0,      # red
-	50,     # Blue
-	75,     # Clock
-	100,    # Compus
-	150,    # Atom
-	300,    # Forest
-	350,    # Galaxy
-	450,    # Gear
-	500,    # Lock
-	550,    # Dragon
-	550,    # Molten
-	650,    # Robot
-	700,    # Rune
-	750,    # Magma
-	800,    # Sunray
-	900,    # Plasma
-	1000,   # Void
-	2000,   # Diamond
-]
-
-# Skin names.
-# The index must match COSTS and SKIN_TEXTURES.
-const SKIN_NAMES := [
-	"RED",
-	"BLUE",
-	"CLOCK",
-	"COMPUS",
-	"ATOM",
-	"FOREST",
-	"GALAXY",
-	"GEAR",
-	"LOCK",
-	"DRAGON",
-	"MOLTEN",
-	"ROBOT",
-	"RUNE",
-	"MAGMA",
-	"SUNRAY",
-	"PLASMA",
-	"VOID",
-	"DIAMOND",
-]
-
-# Placeholder body colors.
-const BODIES := [
-	Color("#ff0000"), # red
-	Color("#ffffff"), # Blue
-	Color("#0080ff"), # Clock
-	Color("#808080"), # Compus
-	Color("#00ff00"), # Atom
-	Color("#00ffff"), # Forest
-	Color("#ff8000"), # Galaxy
-	Color("#228b22"), # Gear
-	Color("#8000ff"), # Lock
-	Color("#ffd900"), # Dragon
-	Color("#555555"), # Molten
-	Color("#ff4500"), # Robot
-	Color("#ee00ff"), # Rune
-	Color("#aaaaaa"), # Magma
-	Color("#0796a3"), # Sunray
-	Color("#ffffff"), # Plasma
-	Color("#ffff00"), # Void
-	Color("#111111"), # Diamond
-]
-
-# Placeholder highlight colors.
-const HIGHLIGHTS := [
-	Color("#ff5555"), # red
-	Color("#eeeeee"), # Blue
-	Color("#55aaff"), # Clock
-	Color("#cccccc"), # Compus
-	Color("#55ff55"), # Atom
-	Color("#55ffff"), # Forest
-	Color("#ffaa55"), # Galaxy
-	Color("#55cc55"), # Gear
-	Color("#cc55ff"), # Lock
-	Color("#f6ff00"), # Dragon
-	Color("#888888"), # Molten
-	Color("#ff7755"), # Robot
-	Color("#ff00dd"), # Rune
-	Color("#dddddd"), # Magma
-	Color("#05e1f5"), # Sunray
-	Color("#ffffff"), # Plasma
-	Color("#ffff88"), # Void
-	Color("#555555"), # Diamond
-]
-
-# This is what your UIManager uses.
-# It contains DICTIONARIES, not strings.
+## Used by the UI. Each entry is a Dictionary with: name, cost, texture (the
+## resource path), body and highlight.
 static var SKINS: Array[Dictionary] = []
+
+# Lists derived from ENTRIES, same index as SKINS.
+static var SKIN_NAMES: Array[String] = []
+static var COSTS: Array[int] = []
+static var SKIN_TEXTURES: Array[Texture2D] = []
 
 
 static func _static_init() -> void:
@@ -141,156 +85,90 @@ static func _static_init() -> void:
 
 static func _build_skins() -> void:
 	SKINS.clear()
+	SKIN_NAMES.clear()
+	COSTS.clear()
+	SKIN_TEXTURES.clear()
 
-	var skin_count := SKIN_NAMES.size()
+	for i in range(ENTRIES.size()):
+		var entry: Dictionary = ENTRIES[i]
 
-	for i in range(skin_count):
-
-		var skin_name := str(SKIN_NAMES[i]).strip_edges()
-
+		# Broken entries keep their slot, so later skins never shift index.
+		var skin_name := str(entry.get("name", "")).strip_edges()
 		if skin_name.is_empty():
-			push_warning(
-				"SkinCatalog: Empty skin name at index %d."
-				% i
-			)
-			continue
+			push_error("SkinCatalog: Skin %d has no name." % i)
+			skin_name = "SKIN %d" % i
 
-		var cost := 0
+		var texture := entry.get("texture") as Texture2D
+		if texture == null:
+			push_error("SkinCatalog: Skin %d (%s) has no texture." % [i, skin_name])
 
-		if i < COSTS.size():
-			cost = maxi(
-				0,
-				int(COSTS[i])
-			)
-
-		var body := Color.WHITE
-
-		if i < BODIES.size():
-			body = BODIES[i]
-
-		var highlight := Color.WHITE
-
-		if i < HIGHLIGHTS.size():
-			highlight = HIGHLIGHTS[i]
-
-		var file_name := skin_name.to_lower() + ".png"
-
-		var texture_path := SKIN_PATH + file_name
+		var cost := maxi(0, int(entry.get("cost", 0)))
+		var body: Color = entry.get("body", DEFAULT_SKIN["body"])
+		var highlight: Color = entry.get("highlight", DEFAULT_SKIN["highlight"])
 
 		SKINS.append({
 			"name": skin_name,
 			"cost": cost,
-			"texture": texture_path,
+			"texture": texture.resource_path if texture else DEFAULT_SKIN["texture"],
 			"body": body,
 			"highlight": highlight,
 		})
+		SKIN_NAMES.append(skin_name)
+		COSTS.append(cost)
+		SKIN_TEXTURES.append(texture)
 
 	_validate_catalog()
 
 
 static func _validate_catalog() -> void:
-
 	if SKINS.is_empty():
-		push_warning(
-			"SkinCatalog: No skins loaded."
-		)
+		push_warning("SkinCatalog: No skins loaded.")
 		return
-
-	for i in range(SKINS.size()):
-
-		var skin: Dictionary = SKINS[i]
-
-		if not skin.has("name"):
-			push_error(
-				"SkinCatalog: Skin %d has no name."
-				% i
-			)
-
-		if not skin.has("cost"):
-			push_error(
-				"SkinCatalog: Skin %d has no cost."
-				% i
-			)
-
-		if not skin.has("texture"):
-			push_error(
-				"SkinCatalog: Skin %d has no texture."
-				% i
-			)
+	if SKINS[0]["cost"] != 0:
+		push_warning("SkinCatalog: The first skin should be free, it is the starting skin.")
+	var seen := {}
+	for skin in SKINS:
+		var skin_name: String = skin["name"]
+		if seen.has(skin_name):
+			push_warning("SkinCatalog: Duplicate skin name '%s'." % skin_name)
+		seen[skin_name] = true
 
 
 static func count() -> int:
 	return SKINS.size()
 
 
+static func _clamp_index(index: int) -> int:
+	return clampi(index, 0, maxi(0, SKINS.size() - 1))
+
+
+## Shared dictionary, not a copy: do not modify it.
 static func get_skin(index: int) -> Dictionary:
-
 	if SKINS.is_empty():
-		return DEFAULT_SKIN.duplicate()
-
-	index = clampi(
-		index,
-		0,
-		SKINS.size() - 1
-	)
-
-	return SKINS[index].duplicate()
+		return DEFAULT_SKIN
+	return SKINS[_clamp_index(index)]
 
 
 static func get_texture(index: int) -> Texture2D:
-
 	if SKIN_TEXTURES.is_empty():
 		return null
-
-	index = clampi(
-		index,
-		0,
-		SKIN_TEXTURES.size() - 1
-	)
-
-	return SKIN_TEXTURES[index]
+	return SKIN_TEXTURES[_clamp_index(index)]
 
 
 static func get_cost(index: int) -> int:
-
-	var skin := get_skin(index)
-
-	return maxi(
-		0,
-		int(skin.get("cost", 0))
-	)
+	return int(get_skin(index).get("cost", 0))
 
 
 static func get_name(index: int) -> String:
-
-	var skin := get_skin(index)
-
-	return str(
-		skin.get(
-			"name",
-			DEFAULT_SKIN["name"]
-		)
-	)
+	return str(get_skin(index).get("name", DEFAULT_SKIN["name"]))
 
 
 static func get_body_color(index: int) -> Color:
-
-	var skin := get_skin(index)
-
-	return skin.get(
-		"body",
-		DEFAULT_SKIN["body"]
-	)
+	return get_skin(index).get("body", DEFAULT_SKIN["body"])
 
 
 static func get_highlight_color(index: int) -> Color:
-
-	var skin := get_skin(index)
-
-	return skin.get(
-		"highlight",
-		DEFAULT_SKIN["highlight"]
-	)
+	return get_skin(index).get("highlight", DEFAULT_SKIN["highlight"])
 
 
 static func is_free(index: int) -> bool:

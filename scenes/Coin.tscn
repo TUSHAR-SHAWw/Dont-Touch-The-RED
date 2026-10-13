@@ -1,18 +1,16 @@
-[gd_scene load_steps=4 format=3 uid="uid://dyocq3n3uowou"]
+[gd_scene format=3 uid="uid://dyocq3n3uowou"]
 
-[ext_resource type="Script" path="res://scripts/Coin.gd" id="1_coin"]
-[ext_resource type="Texture2D" uid="uid://uos5rld586x2" path="res://assets/coin_common.svg" id="2_coin"]
+[ext_resource type="Script" uid="uid://dxxr42vymvx7y" path="res://scripts/Coin.gd" id="1_coin"]
+[ext_resource type="Texture2D" uid="uid://b3qn5rdcrxydn" path="res://assets/common.png" id="2_coin"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_coin"]
 radius = 16.0
 
-[node name="Coin" type="Area2D"]
+[node name="Coin" type="Area2D" unique_id=850922803]
 script = ExtResource("1_coin")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=846526216]
 shape = SubResource("CircleShape2D_coin")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1161177611]
 texture = ExtResource("2_coin")
-# Sprite scale is computed in Coin.gd from the 1:1 185px texture size.
-# No manual scale override here.

@@ -4,8 +4,10 @@ extends Node
 ## Adjust these exported values in Main/GameTuning.
 ##
 ## The game is ENDLESS.
-## Stage 4 is the final difficulty stage and continues forever.
-## Continuous difficulty after Stage 4 is handled by the danger spawner.
+## Difficulty rises slowly: the first minute is gentle (few, easy patterns with
+## long warnings), new patterns unlock one at a time, and everything reaches full
+## strength around `difficulty_ramp_time`. Stage 4 continues forever, and warnings
+## keep getting a little shorter after the ramp (see `late_warning_floor`).
 
 # ============================================================
 # DANGER TIMING
@@ -13,30 +15,53 @@ extends Node
 
 @export_group("Danger Timing")
 
-## Starting interval between danger patterns.
-@export var danger_spawn_interval: float = 2.2
+## Interval between danger patterns at the very start of a run.
+@export var danger_spawn_interval: float = 3.4
 
-## How long the warning phase lasts before a danger becomes active.
+## Warning time once the ramp is finished (seconds before a danger turns lethal).
 @export var danger_warning_time: float = 1.2
 
-## How long a danger remains active.
+## How long a danger stays active once the ramp is finished.
 @export var danger_active_time: float = 2.0
 
 ## Absolute minimum interval between danger patterns.
 ## Prevents the endless game from becoming infinitely fast.
 @export var danger_min_spawn_interval: float = 0.85
 
-## How quickly the spawn interval decreases as the run continues.
-@export var danger_spawn_acceleration: float = 0.025
+## Seconds shaved off the spawn interval per second survived.
+## 3.4s -> 0.85s takes (3.4 - 0.85) / 0.014 = about 180 seconds.
+@export var danger_spawn_acceleration: float = 0.014
+
+
+# ============================================================
+# DIFFICULTY RAMP
+# ============================================================
+
+@export_group("Difficulty Ramp")
+
+## Seconds until warnings and active times reach their normal values.
+@export var difficulty_ramp_time: float = 180.0
+
+## Extra warning seconds at the start of a run; fades to 0 over the ramp.
+@export var start_warning_bonus: float = 0.7
+
+## Danger active time at the start of a run, as a fraction of normal (rises to 1.0).
+@export_range(0.3, 1.0, 0.05) var start_active_scale: float = 0.7
+
+## After the ramp, warnings keep shrinking towards this fraction of normal
+## over another `difficulty_ramp_time` seconds, then stay there (endless pressure).
+@export_range(0.4, 1.0, 0.05) var late_warning_floor: float = 0.8
 
 
 # ============================================================
 # IDLE / ANTI-CAMPING PRESSURE
 # ============================================================
 
+@export_group("Idle Pressure")
+
 ## Idle pressure does not begin immediately.
 ## This gives the player time to start moving naturally.
-@export var idle_pressure_start: float = 20.0
+@export var idle_pressure_start: float = 25.0
 
 ## Size of the anti-camping danger zone.
 @export var idle_pressure_size: float = 92.0
@@ -72,7 +97,7 @@ extends Node
 @export var coin_min_spawn_interval: float = 1.4
 
 @export var powerup_first_spawn_delay: float = 4.0
-@export var powerup_spawn_interval: float = 7
+@export var powerup_spawn_interval: float = 7.0
 
 ## Maximum number of active coins at one time.
 @export var max_active_coins: int = 3
@@ -112,17 +137,20 @@ extends Node
 
 @export_group("Progression")
 
-## Stage 1: 0 seconds onward until threshold.
-@export var stage_1_threshold: float = 10.0
+## Stage banners and rewards. New danger patterns unlock on their own schedule
+## (PATTERN_UNLOCKS in DangerSpawner.gd), spread between these times.
+
+## Stage 1: from 0 seconds until this time.
+@export var stage_1_threshold: float = 45.0
 
 ## Stage 2 begins here.
-@export var stage_2_threshold: float = 30.0
+@export var stage_2_threshold: float = 90.0
 
 ## Stage 3 begins here.
-@export var stage_3_threshold: float = 45.0
+@export var stage_3_threshold: float = 140.0
 
 ## Stage 4 begins here and continues FOREVER.
-@export var stage_4_threshold: float = 60.0
+@export var stage_4_threshold: float = 200.0
 
 @export var stage_reward_coins: int = 12
 @export var stage_reward_score_bonus: float = 0.5

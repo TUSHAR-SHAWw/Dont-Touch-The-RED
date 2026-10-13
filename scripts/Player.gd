@@ -83,6 +83,10 @@ var _pop := 1.0
 var _stretch := 0.0
 var _stretch_angle := 0.0
 
+# Skin colors, cached in set_skin() so _draw() doesn't look them up every frame.
+var _body_color := Color.WHITE
+var _highlight_color := Color.WHITE
+
 var _shield_visible := false
 var _invulnerable := false
 var _last_shield_fx_msec := -10000
@@ -255,6 +259,9 @@ func _update_sprite(delta: float) -> void:
 
 func set_skin(index: int) -> void:
 	skin_index = clampi(index, 0, SkinCatalog.count() - 1)
+	var skin_data := SkinCatalog.get_skin(skin_index)
+	_body_color = skin_data.body
+	_highlight_color = skin_data.highlight
 	if not is_instance_valid(player_sprite):
 		return
 	player_sprite.texture = SkinCatalog.get_texture(skin_index)
@@ -318,11 +325,7 @@ func die() -> void:
 	_fx_tween.tween_property(self, "_pop", 1.35, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_fx_tween.tween_property(self, "_death_spin", PI, 0.35).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	_dirty = true
-	await get_tree().create_timer(1.0).timeout
 	died.emit()
-	#if main and main.has_method("_on_player_died"):
-#
-		#main._on_player_died()
 
 
 func _shield_protected_effect() -> void:
@@ -393,14 +396,10 @@ func clamp_to_arena() -> void:
 # ---------------------------------------------------------------------------
 
 func _draw() -> void:
-	var skin_data := SkinCatalog.get_skin(skin_index)
-	var body_color: Color = skin_data.body
-	var highlight_color: Color = skin_data.highlight
-
 	if not is_dead and not effects_reduced:
-		_draw_trail(body_color)
+		_draw_trail(_body_color)
 		if pulse_enabled:
-			_draw_pulse(highlight_color)
+			_draw_pulse(_highlight_color)
 
 	if _shield_visible and not is_dead:
 		_draw_shield()
