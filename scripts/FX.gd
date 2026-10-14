@@ -1,7 +1,8 @@
 extends Node2D
 
 ## Lightweight world-space particle layer (bursts, rings, sparks).
-## One node draws everything, so effects cost almost nothing.
+## One node draws everything. Particles are textured quads (a cached soft
+## dot), which is far cheaper than draw_circle on phones.
 
 const MAX_PARTICLES := 320
 const MAX_RINGS := 12
@@ -25,6 +26,8 @@ class _Ring extends RefCounted:
 	var life := 0.4
 	var age := 0.0
 
+static var _dot_tex: Texture2D
+
 var reduced := false
 
 var _particles: Array[_Particle] = []
@@ -32,8 +35,24 @@ var _rings: Array[_Ring] = []
 var _was_empty := true
 
 
+## Shared white anti-aliased dot. Tint it with the draw colour.
+static func get_dot() -> Texture2D:
+	if _dot_tex == null:
+		var n := 32
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		var c := (n - 1) * 0.5
+		for y in range(n):
+			for x in range(n):
+				var d := Vector2(x - c, y - c).length()
+				img.set_pixel(x, y, Color(1, 1, 1, clampf(c + 0.5 - d, 0.0, 1.0)))
+		_dot_tex = ImageTexture.create_from_image(img)
+	return _dot_tex
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	get_dot()
 
 
 func set_reduced(value: bool) -> void:
@@ -96,7 +115,9 @@ func _process(delta: float) -> void:
 		var p := _particles[i]
 		p.age += delta
 		if p.age >= p.life:
-			_particles.remove_at(i)
+			# Swap-remove is O(1); draw order of particles does not matter.
+			_particles[i] = _particles[_particles.size() - 1]
+			_particles.pop_back()
 			continue
 		p.vel *= maxf(0.0, 1.0 - p.drag * delta)
 		p.vel.y += p.gravity * delta
@@ -115,8 +136,10 @@ func _draw() -> void:
 		var eased := 1.0 - pow(1.0 - k, 3.0)
 		var radius := lerpf(r.from_radius, r.to_radius, eased)
 		var col := Color(r.color, r.color.a * (1.0 - k))
-		draw_arc(r.pos, radius, 0.0, TAU, 40, col, maxf(1.0, r.width * (1.0 - k * 0.6)))
+		draw_arc(r.pos, radius, 0.0, TAU, 28, col, maxf(1.0, r.width * (1.0 - k * 0.6)))
+	var tex := _dot_tex
 	for p in _particles:
 		var k := p.age / p.life
-		var col := Color(p.color, p.color.a * (1.0 - k))
-		draw_circle(p.pos, maxf(0.5, p.size * (1.0 - k * 0.7)), col)
+		var rad := maxf(0.5, p.size * (1.0 - k * 0.7))
+		draw_texture_rect(tex, Rect2(p.pos.x - rad, p.pos.y - rad, rad * 2.0, rad * 2.0), false,
+				Color(p.color, p.color.a * (1.0 - k)))

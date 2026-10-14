@@ -62,6 +62,8 @@ var selected_skin := 0
 var unlocked_skins: Array = []
 var _next_milestone := 10
 var _current_stage := 0
+var _stage_cache: Array = []
+var _stage_cache_mode := -1
 var selected_mode := 0
 var score_progress := 0.0
 var score_multiplier := 1.0
@@ -119,6 +121,9 @@ var _last_activation_frame := -1
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if OS.has_feature("mobile"):
+		Engine.max_fps = 60
+		get_viewport().msaa_2d = Viewport.MSAA_DISABLED
 	$Arena.process_mode = Node.PROCESS_MODE_PAUSABLE
 	$DangerManager.process_mode = Node.PROCESS_MODE_PAUSABLE
 	$Player.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -251,7 +256,7 @@ func _process_playing(delta: float) -> void:
 	ui.update_active_effects(shield_active, score_boost_time, magnet_time)
 	_trigger_stage_progression()
 	if elapsed >= _next_milestone:
-		var milestone_bonus := 12 + int(score_multiplier * 10.0)
+		var milestone_bonus := 3 + int(score_multiplier * 2.0)
 		ui.show_milestone(_next_milestone)
 		ui.show_pickup("+%d" % milestone_bonus, Color("#ffe07a"), _world_to_screen(player.global_position))
 		game_camera.shake(4.5, 0.14)
@@ -473,7 +478,7 @@ func _do_revive() -> void:
 ## Banks the coins of the current run and ends it (also used by quit-to-menu).
 func _bank_run() -> int:
 	var score := _score()
-	run_coins += int(score / 10.0)
+	run_coins += int(score / 25.0)
 	coins += run_coins
 	if score > best:
 		best = score
@@ -810,7 +815,10 @@ func get_stage_times(for_mode: int) -> Array:
 
 
 func _trigger_stage_progression() -> void:
-	var stages := get_stage_times(selected_mode)
+	if _stage_cache_mode != selected_mode or _stage_cache.is_empty():
+		_stage_cache = get_stage_times(selected_mode)
+		_stage_cache_mode = selected_mode
+	var stages := _stage_cache
 	if _current_stage >= stages.size():
 		return
 	if elapsed < stages[_current_stage]:
@@ -826,7 +834,7 @@ func _trigger_stage_progression() -> void:
 			label = "CHAOS"
 		3:
 			label = "VOID"
-	var reward := int(tuning.stage_reward_coins + _current_stage * 8)
+	var reward := int(tuning.stage_reward_coins + _current_stage * 2)
 	ui.show_stage(title + "\n" + label, "+%d COINS" % reward)
 	ui.show_pickup("+%d" % reward, Color("#ffd166"), _world_to_screen(player.global_position))
 	game_camera.shake(5.5 + _current_stage * 1.5, 0.16)

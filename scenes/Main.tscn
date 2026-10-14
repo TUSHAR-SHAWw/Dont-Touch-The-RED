@@ -20,7 +20,6 @@
 [ext_resource type="AudioStream" uid="uid://dgen7k4s6aswt" path="res://assets/sounds/sfxs/Shield.mp3" id="16_8e850"]
 [ext_resource type="AudioStream" uid="uid://d2uvi1a4ofgm0" path="res://assets/sounds/sfxs/level-up.mp3" id="17_f0w00"]
 [ext_resource type="AudioStream" uid="uid://ckbxfeg4bfig4" path="res://assets/sounds/sfxs/power-up-01a-484722.mp3" id="18_loyo7"]
-[ext_resource type="Script" uid="uid://uq4h64ar4o68" path="res://scripts/performancemonitor.gd" id="21_1iba3"]
 
 [node name="Main" type="Node2D" unique_id=322248154]
 script = ExtResource("1_main")
@@ -76,8 +75,3 @@ script = ExtResource("8_tuning")
 script = ExtResource("5_ui")
 
 [node name="Performance Monitor" type="Node" parent="." unique_id=769725138]
-script = ExtResource("21_1iba3")
-enabled = null
-panel_width = null
-margin = null
-update_interval = null

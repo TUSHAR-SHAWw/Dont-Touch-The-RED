@@ -9,7 +9,7 @@ enum Kind { COMMON, RARE, EPIC }
 
 ## Coin value per Kind (index = Kind). AudioManager's rare/epic thresholds
 ## (3 and 8) are based on these numbers.
-const VALUES := [1, 3, 8]
+const VALUES := [1, 2, 4]
 ## Seconds before expiry during which the coin blinks.
 const BLINK_TIME := 2.0
 const BLINK_RATE := 10.0

@@ -227,6 +227,11 @@ var _inventory: Array = []
 var _reduced_effects := false
 var _touch_controls := false
 var _last_score := 0
+## Blurred StyleBox shadows are costly on phones, so they are skipped there.
+var _lite_shadows := OS.has_feature("mobile") or OS.has_feature("web_android") or OS.has_feature("web_ios")
+var _last_sec := -1
+var _last_time_text := ""
+var _last_fx_key := ""
 var _last_multiplier := 1.0
 var _last_hud_coins := -1
 
@@ -722,8 +727,11 @@ func show_hud(best: int, total_coins := 0, multiplier := 1.0) -> void:
 	_touch_joystick.visible = _touch_controls
 
 	# Reset pop trackers so the HUD doesn't "pop" just from starting a run.
-	_last_score = 0
+	_last_score = -1 # -1 forces the label refresh below without a pop
 	_last_multiplier = multiplier
+	_multiplier_label.text = "x%.1f" % multiplier
+	_last_sec = -1
+	_last_fx_key = ""
 	_last_hud_coins = -1
 
 	update_timer(0.0, 0, multiplier, total_coins)
@@ -733,7 +741,7 @@ func show_hud(best: int, total_coins := 0, multiplier := 1.0) -> void:
 func show_game_over(score: int, best: int, earned_coins := 0, multiplier := 1.0) -> void:
 	_show_only(go_panel)
 
-	go_best.text = "BEST: %d   +%d COINS   x%.1f" % [best, earned_coins, multiplier]
+	go_best.text = "BEST: %d  COINS: +%d  MULTIPLIER X%.1f" % [best, earned_coins, multiplier]
 	_go_gems_label.text = "GEMS: %d" % _gems
 
 	var is_new_best := score > 0 and score >= best
@@ -776,17 +784,22 @@ func update_timer(
 	total_coins := -1
 ) -> void:
 
-	hud_timer.text = "TIME: " + _fmt_time(int(seconds))
-	_score_label.text = "SCORE: %d" % score
-	_multiplier_label.text = "x%.1f" % multiplier
+	# Only touch labels when the value changed (text updates re-layout the label).
+	var sec := int(seconds)
+	if sec != _last_sec:
+		_last_sec = sec
+		hud_timer.text = "TIME: " + _fmt_time(sec)
 
-	if score > _last_score:
-		_pop(_score_label, 1.18, 0.2)
-	_last_score = score
+	if score != _last_score:
+		_score_label.text = "SCORE: %d" % score
+		if _last_score >= 0 and score > _last_score:
+			_pop(_score_label, 1.18, 0.2)
+		_last_score = score
 
 	if not is_equal_approx(multiplier, _last_multiplier):
+		_multiplier_label.text = "x%.1f" % multiplier
 		_pop(_multiplier_label, 1.5, 0.35)
-	_last_multiplier = multiplier
+		_last_multiplier = multiplier
 
 	# Only touch the coin label when the caller supplies a value.
 	if total_coins >= 0:
@@ -799,6 +812,12 @@ func update_timer(
 func update_active_effects(shield: bool, score_time: float, magnet_time: float) -> void:
 	var has_score := score_time > 0.0
 	var has_magnet := magnet_time > 0.0
+
+	var key := "%d|%d|%d" % [int(shield), ceili(score_time), ceili(magnet_time)]
+	var blinking := (has_score and score_time <= 3.0) or (has_magnet and magnet_time <= 3.0)
+	if key == _last_fx_key and not blinking:
+		return # nothing visible changed
+	_last_fx_key = key
 
 	_effect_labels["shield"].visible = shield
 	_effect_labels["score"].visible = has_score
@@ -836,6 +855,14 @@ func _show_only(target: Control, show_background := true, keep_hud := false) -> 
 	hud.visible = keep_hud
 	_background.visible = show_background and target != null
 	_touch_joystick.visible = false
+
+	# The dim is baked into the background shader, so the full-screen alpha
+	# overlay is hidden whenever the background is showing.
+	if target != null and target.has_meta("overlay"):
+		var ov := target.get_meta("overlay") as ColorRect
+		if _background.visible:
+			_background.set_dim(ov.color)
+		ov.visible = not _background.visible
 
 	if _background.visible:
 		_background.kick()
@@ -1133,6 +1160,8 @@ func _highlight_mode(mode: int) -> void:
 
 
 func _add_title_shadow(l: Label) -> void:
+	if _lite_shadows:
+		return
 	l.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.7))
 	l.add_theme_constant_override("shadow_offset_x", 3)
 	l.add_theme_constant_override("shadow_offset_y", 4)
@@ -2389,6 +2418,7 @@ func play_transition() -> void:
 func _make_panel(overlay_color := MENU_OVERLAY) -> Control:
 	var p := Control.new()
 	_full_rect(p)
+	p.mouse_filter = Control.MOUSE_FILTER_STOP # still blocks clicks when the overlay is hidden
 	p.visible = false
 
 	var overlay := ColorRect.new()
@@ -2396,6 +2426,7 @@ func _make_panel(overlay_color := MENU_OVERLAY) -> Control:
 	overlay.color = overlay_color
 	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	p.add_child(overlay)
+	p.set_meta("overlay", overlay)
 
 	return p
 
@@ -2710,6 +2741,10 @@ func _get_button_styles(bg: Color) -> Dictionary:
 	var focus := normal.duplicate() as StyleBoxFlat
 	focus.border_color = Color("#ffd166")
 	focus.set_border_width_all(2)
+
+	if _lite_shadows:
+		for s in [normal, hover, pressed, disabled, focus]:
+			s.shadow_size = 0
 
 	var styles := {
 		"normal": normal,

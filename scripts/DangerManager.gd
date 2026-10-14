@@ -12,29 +12,46 @@ const SAFE_MARGIN := 16.0
 const SAFE_POINTS_REQUIRED := 3
 const LASER_THICKNESS := 28.0
 
+## Idle pressure only fires after the player has stood still this long,
+## and then not again until the cooldown has passed.
+const IDLE_TRIGGER_TIME := 1.5
+const IDLE_COOLDOWN := 6.0
+
 ## Patterns unlock one at a time as the run goes on: [method name, seconds].
 ## Times are for Normal mode; Rush and Zen scale them like the stage times.
 const PATTERN_UNLOCKS := [
+	# Opening: patterns that aim at where the player is, so standing still hurts.
+	[&"_pattern_side_on_player", 0.0],
+	[&"_pattern_strip_on_player", 0.0],
 	[&"_pattern_side_rect", 0.0],
 	[&"_pattern_strip", 0.0],
 	[&"_pattern_expand", 10.0],
+	[&"_pattern_ring", 15.0],
 	[&"_pattern_bombs", 20.0],
+	[&"_pattern_rain", 25.0],
 	[&"_pattern_spike_ball", 30.0],
 	[&"_pattern_spikes", 38.0],
 	# Stage 1 (45s)
 	[&"_pattern_cross", 45.0],
+	[&"_pattern_diagonal", 50.0],
 	[&"_pattern_zigzag", 55.0],
+	[&"_pattern_pincer", 58.0],
 	[&"_pattern_moving_wall", 60.0],
 	[&"_pattern_laser_snipe", 65.0],
 	[&"_pattern_pinwheel", 72.0],
 	# Stage 2 (90s)
 	[&"_pattern_double_sides", 90.0],
+	[&"_pattern_laser_cage", 95.0],
 	[&"_pattern_crusher", 100.0],
+	[&"_pattern_bomb_line", 105.0],
 	[&"_pattern_laser_barrage", 112.0],
 	# Stage 3 (140s)
 	[&"_pattern_corner_pair", 140.0],
+	[&"_pattern_spiral_bombs", 145.0],
 	[&"_pattern_sweeper", 152.0],
+	[&"_pattern_double_sweeper", 160.0],
 	[&"_pattern_checkerboard", 168.0],
+	[&"_pattern_lanes", 175.0],
 ]
 
 signal danger_spawned(zone)
@@ -50,6 +67,8 @@ var player: Node2D
 var elapsed := 0.0
 var mode := 0
 var _run_generation := 0
+var _idle_time := 0.0
+var _idle_cooldown := 0.0
 @onready var tuning := get_node("../GameTuning")
 
 # Arena half-size. Read from the Arena node in _ready (default 400/300).
@@ -67,6 +86,8 @@ func start(p: Node2D, selected_mode := 0) -> void:
 	player = p
 	mode = selected_mode
 	elapsed = 0.0
+	_idle_time = 0.0
+	_idle_cooldown = 0.0
 	running = true
 	spawn_interval = tuning.danger_spawn_interval
 	warning_time = tuning.danger_warning_time
@@ -86,6 +107,8 @@ func stop() -> void:
 	_run_generation += 1
 	running = false
 	elapsed = 0.0
+	_idle_time = 0.0
+	_idle_cooldown = 0.0
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	for child in get_children():
 		if child is DangerZone or child is SpikeBall:
@@ -105,6 +128,7 @@ func suspend() -> void:
 func resume(extra_delay := 1.5) -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	clear_hazards()
+	_idle_time = 0.0
 	_run_generation += 1
 	running = true
 	_schedule(_run_generation, extra_delay)
@@ -118,8 +142,14 @@ func clear_hazards() -> void:
 
 
 func _process(delta: float) -> void:
-	if running:
-		elapsed += delta
+	if not running:
+		return
+	elapsed += delta
+	_idle_cooldown = maxf(0.0, _idle_cooldown - delta)
+	if is_instance_valid(player) and player.velocity.length() < 10.0:
+		_idle_time += delta
+	else:
+		_idle_time = 0.0
 
 
 func _schedule(generation: int, initial_delay := 0.0) -> void:
@@ -138,10 +168,13 @@ func _schedule(generation: int, initial_delay := 0.0) -> void:
 
 
 func _spawn_random_pattern() -> void:
-	var idle: bool = is_instance_valid(player) and player.velocity.length() < 10.0
+	# Idle pressure: only after standing still for a while, and on a cooldown.
+	var idle := _idle_time >= IDLE_TRIGGER_TIME and _idle_cooldown <= 0.0
 	if elapsed >= tuning.idle_pressure_start and idle:
-		_pattern_player_pressure()
-		return
+		if _pattern_player_pressure():
+			_idle_cooldown = IDLE_COOLDOWN
+			_idle_time = 0.0
+			return
 
 	var stage_times := _stage_times()
 	# Rush / Zen scale the stage times; unlock times follow the same scale.
@@ -154,14 +187,25 @@ func _spawn_random_pattern() -> void:
 			continue
 		if elapsed >= float(entry[1]) * unlock_scale:
 			patterns.append(Callable(self, method))
-	if elapsed >= tuning.idle_pressure_start:
-		patterns.append(_pattern_player_pressure)
+
+	# Opening: lean towards patterns that hit the player's area, so the
+	# first half minute can't be survived by standing in a corner.
+	if elapsed < 30.0 * unlock_scale:
+		patterns.append(_pattern_side_on_player)
+		patterns.append(_pattern_strip_on_player)
+
+	# Duplicates act as extra weight for the nastier patterns.
+	if elapsed >= float(stage_times[1]):
+		patterns.append(_pattern_laser_cage)
+		patterns.append(_pattern_bomb_line)
+	if elapsed >= float(stage_times[2]):
+		patterns.append(_pattern_spiral_bombs)
+		patterns.append(_pattern_double_sweeper)
 	if elapsed >= float(stage_times[3]):
-		# Duplicates act as extra weight for the nastier patterns.
-		patterns.append(_pattern_player_pressure)
 		patterns.append(_pattern_double_sides)
 		patterns.append(_pattern_corner_pair)
 		patterns.append(_pattern_sweeper)
+		patterns.append(_pattern_lanes)
 
 	var shuffled := patterns.duplicate()
 	shuffled.shuffle()
@@ -305,6 +349,13 @@ func _random_sign() -> float:
 	return 1.0 if randf() < 0.5 else -1.0
 
 
+## Spawns round blasts for the given boxes. warn_base + i * warn_step staggers
+## the warning so blasts can go off in sequence.
+func _spawn_circles(boxes: Array[Rect2], warn_base := 0.9, warn_step := 0.0) -> void:
+	for i in range(boxes.size()):
+		_spawn_zone_as(boxes[i], Vector2.ZERO, 0.0, DangerZone.Kind.CIRCLE, Vector2.ZERO, 0.0, {"warn_scale": warn_base + i * warn_step})
+
+
 # ---------------------------------------------------------------------------
 # Original patterns
 # ---------------------------------------------------------------------------
@@ -336,6 +387,7 @@ func _pattern_side_rect() -> bool:
 	return _spawn_rects([_random_side_rect()])
 
 
+## Square zone dropped on the player. Only used by the idle check now.
 func _pattern_player_pressure() -> bool:
 	if not is_instance_valid(player):
 		return false
@@ -438,9 +490,11 @@ func _pattern_double_sides() -> bool:
 func _pattern_corner_pair() -> bool:
 	var half := _arena_half
 	var corner_size := Vector2(half.x * 0.42, half.y * 0.38)
-	var left := Rect2(Vector2(-half.x, -half.y), corner_size)
-	var right := Rect2(Vector2(half.x - corner_size.x, half.y - corner_size.y), corner_size)
-	return _spawn_rects([left, right])
+	var inset := 6.0  # keeps outlines/glow inside the arena
+	var arena := _arena_rect().grow(-inset)
+	var tl := Rect2(Vector2(-half.x, -half.y), corner_size).intersection(arena)
+	var br := Rect2(Vector2(half.x - corner_size.x, half.y - corner_size.y), corner_size).intersection(arena)
+	return _spawn_rects([tl, br])
 
 
 func _pattern_zigzag() -> bool:
@@ -477,7 +531,7 @@ func _pattern_pinwheel() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# New patterns
+# Patterns added earlier
 # ---------------------------------------------------------------------------
 
 ## Round blasts. One leads the player's movement, the rest are scattered.
@@ -515,8 +569,7 @@ func _pattern_bombs() -> bool:
 		boxes.append(Rect2(spots[i] - Vector2(radii[i], radii[i]), Vector2(radii[i], radii[i]) * 2.0))
 	if not _has_safe_room(boxes):
 		return false
-	for box in boxes:
-		_spawn_zone_as(box, Vector2.ZERO, 0.0, DangerZone.Kind.CIRCLE, Vector2.ZERO, 0.0, {"warn_scale": 0.9})
+	_spawn_circles(boxes, 0.9)
 	return true
 
 
@@ -634,4 +687,238 @@ func _pattern_checkerboard() -> bool:
 	# No "player not inside" check on purpose: a longer warning lets them step off.
 	for rect in rects:
 		_spawn_zone_as(rect, Vector2.ZERO, 0.0, DangerZone.Kind.RECTANGLE, Vector2.ZERO, 0.0, {"warn_scale": 1.15})
+	return true
+
+
+# ---------------------------------------------------------------------------
+# Opening patterns: aimed at the player so standing still doesn't work
+# ---------------------------------------------------------------------------
+
+## Side rect on the half of the arena the player is standing in.
+func _pattern_side_on_player() -> bool:
+	if not is_instance_valid(player):
+		return false
+	var half := _arena_half
+	var p := player.global_position
+	var w := half.x * randf_range(0.5, 0.65)
+	var h := half.y * randf_range(0.5, 0.65)
+	var rect: Rect2
+	if randf() < 0.5:
+		var x := -half.x if p.x < 0.0 else half.x - w
+		rect = Rect2(Vector2(x, -half.y), Vector2(w, half.y * 2.0))
+	else:
+		var y := -half.y if p.y < 0.0 else half.y - h
+		rect = Rect2(Vector2(-half.x, y), Vector2(half.x * 2.0, h))
+	# The player is inside on purpose; the longer warning lets them step out.
+	if not _has_safe_room([rect]):
+		return false
+	_spawn_zone_as(rect, Vector2.ZERO, 0.0, DangerZone.Kind.RECTANGLE, Vector2.ZERO, 0.0, {"warn_scale": 1.1})
+	return true
+
+
+## A strip centred on the player's row or column.
+func _pattern_strip_on_player() -> bool:
+	if not is_instance_valid(player):
+		return false
+	var half := _arena_half
+	var p := player.global_position
+	var rect: Rect2
+	if randf() < 0.5:
+		var t := half.x * 0.3
+		var x := clampf(p.x - t / 2.0, -half.x, half.x - t)
+		rect = Rect2(Vector2(x, -half.y), Vector2(t, half.y * 2.0))
+	else:
+		var t := half.y * 0.3
+		var y := clampf(p.y - t / 2.0, -half.y, half.y - t)
+		rect = Rect2(Vector2(-half.x, y), Vector2(half.x * 2.0, t))
+	if not _has_safe_room([rect]):
+		return false
+	_spawn_zone_as(rect, Vector2.ZERO, 0.0, DangerZone.Kind.RECTANGLE, Vector2.ZERO, 0.0, {"warn_scale": 1.1})
+	return true
+
+
+## Hollow square frame around the player: safe in the hole, so the player
+## has to either stay put inside it or step out before it fires.
+func _pattern_ring() -> bool:
+	if not is_instance_valid(player):
+		return false
+	var c := _clamp_point(player.global_position, 130.0)
+	var inner := 70.0
+	var outer := 130.0
+	var rects: Array[Rect2] = [
+		Rect2(c + Vector2(-outer, -outer), Vector2(outer * 2.0, outer - inner)),
+		Rect2(c + Vector2(-outer, inner), Vector2(outer * 2.0, outer - inner)),
+		Rect2(c + Vector2(-outer, -inner), Vector2(outer - inner, inner * 2.0)),
+		Rect2(c + Vector2(inner, -inner), Vector2(outer - inner, inner * 2.0)),
+	]
+	if not _has_safe_room(rects):
+		return false
+	for rect in rects:
+		_spawn_zone_as(rect, Vector2.ZERO, 0.0, DangerZone.Kind.RECTANGLE)
+	return true
+
+
+## Small round blasts in a rough column, going off top to bottom.
+func _pattern_rain() -> bool:
+	var half := _arena_half
+	var count := randi_range(5, 7)
+	var r := 42.0
+	var x0 := randf_range(-half.x + 60.0, half.x - 60.0)
+	var step := (half.y * 2.0 - r * 2.0) / float(count - 1)
+	var boxes: Array[Rect2] = []
+	for i in range(count):
+		var x := clampf(x0 + randf_range(-110.0, 110.0), -half.x + r, half.x - r)
+		var y := -half.y + r + i * step
+		boxes.append(Rect2(Vector2(x, y) - Vector2(r, r), Vector2(r, r) * 2.0))
+	if not _has_safe_room(boxes):
+		return false
+	_spawn_circles(boxes, 0.8, 0.1)
+	return true
+
+
+# ---------------------------------------------------------------------------
+# Stage 1 additions
+# ---------------------------------------------------------------------------
+
+## A wide bar cutting the arena diagonally.
+## A wide bar cutting the arena corner to corner, fully inside the arena.
+func _pattern_diagonal() -> bool:
+	var half := _arena_half
+	var thick := minf(half.x, half.y) * 0.3
+	var angle := atan2(half.y, half.x) * _random_sign()   # points at the real corners
+	var dir := Vector2.from_angle(angle)
+	var a := absf(angle)
+	# Longest bar whose end corners still fit inside the arena.
+	var max_x := (half.x - thick * 0.5 * sin(a)) / cos(a)
+	var max_y := (half.y - thick * 0.5 * cos(a)) / sin(a)
+	var length := minf(max_x, max_y) * 2.0 - 8.0
+
+	# Fairness: approximate the rotated bar with boxes along its length.
+	var boxes: Array[Rect2] = []
+	var steps := 10
+	for i in range(steps + 1):
+		var c := dir * (-length / 2.0 + length * i / float(steps))
+		boxes.append(Rect2(c - Vector2(thick, thick) / 2.0, Vector2(thick, thick)))
+	if not _has_safe_room(boxes):
+		return false
+
+	var rect := Rect2(Vector2(-length, -thick) / 2.0, Vector2(length, thick))
+	_spawn_zone_as(rect, Vector2.ZERO, 0.0, DangerZone.Kind.RECTANGLE, Vector2.ZERO, 0.0, {"angle": angle})
+	return true
+
+
+## Two walls close in from the left and right edges, leaving the middle free.
+func _pattern_pincer() -> bool:
+	var half := _arena_half
+	var w := half.x * randf_range(0.28, 0.36)
+	var left := Rect2(Vector2(-half.x, -half.y), Vector2(w, half.y * 2.0))
+	var right := Rect2(Vector2(half.x - w, -half.y), Vector2(w, half.y * 2.0))
+	return _spawn_rects([left, right])
+
+
+# ---------------------------------------------------------------------------
+# Stage 2 additions
+# ---------------------------------------------------------------------------
+
+## Lasers box in the player, with one side left open.
+func _pattern_laser_cage() -> bool:
+	if not is_instance_valid(player):
+		return false
+	var p := _clamp_point(player.global_position, 100.0)
+	var d := 90.0
+	var skip := randi_range(0, 3)
+	var rects: Array[Rect2] = []
+	if skip != 0:
+		rects.append(_laser_rect(true, p.y - d))
+	if skip != 1:
+		rects.append(_laser_rect(true, p.y + d))
+	if skip != 2:
+		rects.append(_laser_rect(false, p.x - d))
+	if skip != 3:
+		rects.append(_laser_rect(false, p.x + d))
+	if not _has_safe_room(rects):
+		return false
+	for rect in rects:
+		_spawn_zone_as(rect, Vector2.ZERO, 0.0, DangerZone.Kind.LASER, Vector2.ZERO, 0.0, {"active_scale": 0.6})
+	return true
+
+
+## A row or column of bombs across the arena with one gap.
+func _pattern_bomb_line() -> bool:
+	var half := _arena_half
+	var horizontal := randf() < 0.5
+	var r := 48.0
+	var span := half.x if horizontal else half.y
+	var cross_range := half.y if horizontal else half.x
+	var cross := randf_range(-0.5, 0.5) * cross_range
+	var gap_at := randf_range(-span * 0.6, span * 0.6)
+	var boxes: Array[Rect2] = []
+	var pos := -span + r
+	while pos < span - r:
+		if absf(pos - gap_at) > r * 1.8:
+			var center := Vector2(pos, cross) if horizontal else Vector2(cross, pos)
+			boxes.append(Rect2(center - Vector2(r, r), Vector2(r, r) * 2.0))
+		pos += r * 2.0 + 6.0
+	if boxes.is_empty() or not _has_safe_room(boxes):
+		return false
+	_spawn_circles(boxes, 1.0)
+	return true
+
+
+# ---------------------------------------------------------------------------
+# Stage 3 additions
+# ---------------------------------------------------------------------------
+
+## Bombs laid out in an outward spiral that go off one after another.
+func _pattern_spiral_bombs() -> bool:
+	var r := 45.0
+	var start_angle := randf() * TAU
+	var boxes: Array[Rect2] = []
+	for i in range(7):
+		var ang := start_angle + i * 0.9
+		var dist := 40.0 + i * 38.0
+		var c := _clamp_point(Vector2.from_angle(ang) * dist, r)
+		boxes.append(Rect2(c - Vector2(r, r), Vector2(r, r) * 2.0))
+	if not _has_safe_room(boxes):
+		return false
+	_spawn_circles(boxes, 0.7, 0.12)
+	return true
+
+
+## Two sweepers spinning in opposite directions.
+func _pattern_double_sweeper() -> bool:
+	var half := _arena_half
+	var length := half.y * 1.2
+	var thick := 20.0
+	var spin := randf_range(1.0, 1.3)
+	var pivots: Array[Vector2] = [Vector2(-half.x * 0.4, 0.0), Vector2(half.x * 0.4, 0.0)]
+	var boxes: Array[Rect2] = []
+	for pv in pivots:
+		if is_instance_valid(player) and pv.distance_to(player.global_position) < 70.0:
+			return false
+		boxes.append(Rect2(pv - Vector2(length, length) / 2.0, Vector2(length, length)))
+	if not _has_safe_room(boxes):
+		return false
+	for i in range(pivots.size()):
+		var rect := Rect2(pivots[i] - Vector2(length, thick) / 2.0, Vector2(length, thick))
+		var dir := 1.0 if i == 0 else -1.0
+		_spawn_zone_as(rect, Vector2.ZERO, 0.0, DangerZone.Kind.SWEEPER, Vector2.ZERO, 0.0, {"spin": spin * dir, "angle": randf() * PI})
+	return true
+
+
+## Every other vertical lane goes lethal.
+func _pattern_lanes() -> bool:
+	var half := _arena_half
+	var lanes := 6
+	var w := half.x * 2.0 / lanes
+	var parity := randi_range(0, 1)
+	var rects: Array[Rect2] = []
+	for i in range(lanes):
+		if i % 2 == parity:
+			rects.append(Rect2(Vector2(-half.x + i * w, -half.y), Vector2(w, half.y * 2.0)).grow(-4.0))
+	if not _has_safe_room(rects):
+		return false
+	# Like the checkerboard: a longer warning lets the player step to a safe lane.
+	for rect in rects:
+		_spawn_zone_as(rect, Vector2.ZERO, 0.0, DangerZone.Kind.RECTANGLE, Vector2.ZERO, 0.0, {"warn_scale": 1.2})
 	return true

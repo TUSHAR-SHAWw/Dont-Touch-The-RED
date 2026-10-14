@@ -61,10 +61,10 @@ extends Node
 
 ## Idle pressure does not begin immediately.
 ## This gives the player time to start moving naturally.
-@export var idle_pressure_start: float = 25.0
+@export var idle_pressure_start: float = 40.0
 
 ## Size of the anti-camping danger zone.
-@export var idle_pressure_size: float = 92.0
+@export var idle_pressure_size: float = 80.0
 
 
 # ============================================================
@@ -92,12 +92,12 @@ extends Node
 
 @export_group("Collectible Timing")
 
-@export var coin_first_spawn_delay: float = 0.35
-@export var coin_spawn_interval: float = 6.0
+@export var coin_first_spawn_delay: float = 4
+@export var coin_spawn_interval: float = 10.0
 @export var coin_min_spawn_interval: float = 1.4
 
-@export var powerup_first_spawn_delay: float = 4.0
-@export var powerup_spawn_interval: float = 7.0
+@export var powerup_first_spawn_delay: float = 6.0
+@export var powerup_spawn_interval: float = 15.0
 
 ## Maximum number of active coins at one time.
 @export var max_active_coins: int = 3
@@ -110,9 +110,9 @@ extends Node
 @export_group("Collectible Lifetimes")
 
 @export var common_coin_lifetime: float = 5.0
-@export var rare_coin_lifetime: float = 9.0
+@export var rare_coin_lifetime: float = 7.0
 @export var epic_coin_lifetime: float = 10.0
-@export var powerup_lifetime: float = 10.0
+@export var powerup_lifetime: float = 5.0
 
 
 # ============================================================
@@ -121,7 +121,7 @@ extends Node
 
 @export_group("Scoring")
 
-@export var milestone_interval: float = 10.0
+@export var milestone_interval: float = 30.0
 @export var coin_score_value: float = 5.0
 
 @export var score_boost_duration: float = 8.0
@@ -152,7 +152,7 @@ extends Node
 ## Stage 4 begins here and continues FOREVER.
 @export var stage_4_threshold: float = 200.0
 
-@export var stage_reward_coins: int = 12
+@export var stage_reward_coins: int = 3
 @export var stage_reward_score_bonus: float = 0.5
 
 

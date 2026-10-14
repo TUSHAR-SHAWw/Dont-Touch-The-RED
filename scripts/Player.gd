@@ -11,6 +11,7 @@ signal died
 signal wall_hit(world_position: Vector2, strength: float)
 
 const SkinCatalog := preload("res://scripts/SkinCatalog.gd")
+const FXScript := preload("res://scripts/FX.gd")
 
 ## All skin textures are 1:1 square. The sprite scale is derived from
 ## the actual texture size so the rendered player stays a consistent
@@ -454,10 +455,13 @@ func _draw_trail(body_color: Color) -> void:
 	if not trail_enabled or _trail.size() < 2:
 		return
 	var last := float(maxi(1, _trail.size() - 1))
+	var dot := FXScript.get_dot()
 	for i in range(_trail.size() - 1):
 		var ratio := float(i) / last
-		var trail_radius := lerpf(visual_radius * 0.75, visual_radius * 0.20, ratio)
-		draw_circle(to_local(_trail[i]), trail_radius, Color(body_color, (1.0 - ratio) * 0.22))
+		var r := lerpf(visual_radius * 0.75, visual_radius * 0.20, ratio)
+		var c := to_local(_trail[i])
+		# Textured quad instead of draw_circle (about 50x cheaper per call).
+		draw_texture_rect(dot, Rect2(c.x - r, c.y - r, r * 2.0, r * 2.0), false, Color(body_color, (1.0 - ratio) * 0.22))
 
 
 ## Gentle breathing ring. Drawn whenever the player is alive, even when standing still.
