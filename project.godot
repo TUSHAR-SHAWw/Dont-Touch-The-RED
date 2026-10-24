@@ -19,6 +19,14 @@ run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://logo.png"
 
+[audio]
+
+general/default_playback_type.web=0
+
+[autoload]
+
+CrazySDK="*res://scripts/CrazySDK.gd"
+
 [display]
 
 window/size/viewport_width=1280

@@ -49,9 +49,7 @@ signal shop_menu_closed
 signal shop_action(item, action)
 signal item_use_requested(item)
 signal revive_pressed
-signal revive_ad_pressed
 signal revive_declined
-signal gem_ad_requested(placement)
 
 
 # ============================================================================
@@ -64,7 +62,7 @@ const ACCENT := Color("#e02323")
 const DIM := Color(0.65, 0.65, 0.7)
 const LOCKED_DIM := Color(0.55, 0.55, 0.6)
 
-const SHOP_PRICES := [30, 60, 90]
+const SHOP_PRICES := [30, 60, 90, 500]
 const MULTIPLIER_MAX_LEVEL := 8
 const MULTIPLIER_STEP := 0.5
 const MULTIPLIER_MAX := 5.0
@@ -149,7 +147,6 @@ var go_best: Label
 var _new_best_label: Label
 var _try_again_button: Button
 var _go_gems_label: Label
-var _go_ad_button: Button
 
 # Skins
 var _skin_scroll: ScrollContainer
@@ -185,16 +182,10 @@ var _revive_number: Label
 var _revive_subtitle: Label
 var _revive_info: Label
 var _revive_button: Button
-var _revive_ad_button: Button
 var _revive_skip_button: Button
 var _revive_gems_label: Label
 var _revive_last_second := -1
 var _revive_pulse_tween: Tween
-var _ad_panel: Control
-var _ad_bar: ColorRect
-var _ad_title: Label
-var _ad_tween: Tween
-var _ad_pulse_tween: Tween
 
 # Settings
 var _settings_scroll: ScrollContainer
@@ -271,6 +262,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 	_build_hud()
+	_build_controls_hint()
 
 	# One shared animated background: above the HUD, below every panel.
 	_background = AnimatedBackground.new()
@@ -289,7 +281,6 @@ func _ready() -> void:
 	_build_overlays()
 	_build_touch_joystick()
 	_build_loading_screen()
-	_build_ad_placeholder()
 
 	_apply_responsive_layout()
 	get_viewport().size_changed.connect(_apply_responsive_layout)
@@ -684,36 +675,10 @@ func update_revive_timer(left: float, total: float) -> void:
 func _refresh_revive_buttons() -> void:
 	if not is_instance_valid(_revive_button):
 		return
-	if _gems > 0:
-		_revive_subtitle.text = "SPEND 1 GEM TO KEEP YOUR RUN GOING"
-		_revive_button.visible = true
-		_revive_ad_button.text = "OR WATCH AN AD: FREE REVIVE"
-	else:
-		_revive_subtitle.text = "OUT OF GEMS - WATCH AN AD TO CONTINUE"
-		_revive_button.visible = false
-		_revive_ad_button.text = "WATCH AD TO REVIVE"
-	_revive_ad_button.custom_minimum_size.y = 58.0 if _gems > 0 else 72.0
-	_focus_buttons[revive_panel] = _revive_button if _gems > 0 else _revive_ad_button
-
-
-func show_ad_placeholder(seconds: float) -> void:
-	_ad_panel.visible = true
-	_ad_bar.size = Vector2(0.0, _ad_bar.size.y)
-	_kill_tween(_ad_tween)
-	_ad_tween = create_tween()
-	_ad_tween.tween_property(_ad_bar, "size:x", 320.0, maxf(seconds, 0.1))
-	_kill_tween(_ad_pulse_tween)
-	_ad_pulse_tween = create_tween().set_loops()
-	_ad_pulse_tween.tween_property(_ad_title, "modulate:a", 0.55, 0.45).set_trans(Tween.TRANS_SINE)
-	_ad_pulse_tween.tween_property(_ad_title, "modulate:a", 1.0, 0.45).set_trans(Tween.TRANS_SINE)
-
-
-func hide_ad_placeholder() -> void:
-	if not is_instance_valid(_ad_panel):
-		return
-	_ad_panel.visible = false
-	_kill_tween(_ad_tween)
-	_kill_tween(_ad_pulse_tween)
+	# The prompt is only ever shown when the player has a gem to spend.
+	_revive_subtitle.text = "SPEND 1 GEM TO KEEP YOUR RUN GOING"
+	_revive_button.visible = true
+	_focus_buttons[revive_panel] = _revive_button
 
 
 func hide_pause() -> void:
@@ -824,10 +789,10 @@ func update_active_effects(shield: bool, score_time: float, magnet_time: float) 
 	_effect_labels["magnet"].visible = has_magnet
 
 	if has_score:
-		_effect_labels["score"].text = "DOUBLE SCORE  %02ds" % ceili(score_time)
+		_effect_labels["score"].text = "2X SCORE  %02ds" % ceili(score_time)
 		_effect_labels["score"].modulate.a = _blink(score_time)
 	if has_magnet:
-		_effect_labels["magnet"].text = "COIN MAGNET   %02ds" % ceili(magnet_time)
+		_effect_labels["magnet"].text = "MAGNET  %02ds" % ceili(magnet_time)
 		_effect_labels["magnet"].modulate.a = _blink(magnet_time)
 
 	# The ACTIVE POWERUPS panel is permanent. Keep the panel visible even when
@@ -927,7 +892,7 @@ func _build_hud() -> void:
 	_center_pivot(hud_timer)
 
 	# Best score lives in the upper-right corner.
-	hud_best = _label("BEST: 0", 30, Color("#c5c5cf"))
+	hud_best = _label("BEST: 0", 25, Color("#c5c5cf"))
 	hud_best.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	hud.add_child(hud_best)
 	hud_best.z_index = 20
@@ -971,6 +936,7 @@ func _build_hud() -> void:
 	_stage_background = ColorRect.new()
 	_stage_background.color = Color(0.05, 0.05, 0.09, 0.78)
 	_stage_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_stage_background.offset_right=280
 	hud.add_child(_stage_background)
 	_stage_background.z_index = 5
 
@@ -1001,7 +967,7 @@ func _build_hud() -> void:
 	_effects_bg.add_child(effects_box)
 	effects_box.z_index = 10
 
-	var effects_title := _label("ACTIVE POWERUPS", 16, Color("#b8b8c4"))
+	var effects_title := _label("POWERUPS", 16, Color("#b8b8c4"))
 	effects_title.z_index = 15
 	effects_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	effects_box.add_child(effects_title)
@@ -1014,9 +980,9 @@ func _build_hud() -> void:
 		_effect_labels[key] = effect_label
 		effects_box.add_child(effect_label)
 
-	_effect_labels["shield"].text = "SHIELD       READY"
+	_effect_labels["shield"].text = "SHIELD  READY"
 
-	_effects_empty_label = _label("NO ACTIVE POWERUPS", 15, Color("#777d91"))
+	_effects_empty_label = _label("NO POWERUPS", 15, Color("#777d91"))
 	_effects_empty_label.z_index = 15
 	effects_box.add_child(_effects_empty_label)
 
@@ -1031,16 +997,114 @@ func _build_hud() -> void:
 		var item_button := _button("ITEM", Color("#3a3a44"))
 		item_button.custom_minimum_size = Vector2(0, 52)
 		item_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		item_button.add_theme_font_size_override("font_size", 16)
+		item_button.add_theme_font_size_override("font_size", _fs(16))
 		item_button.pressed.connect(_on_item_pressed.bind(i))
 		_item_bar.add_child(item_button)
 		_item_buttons.append(item_button)
 
 	_pause_button = _button("PAUSE", Color("#3a3a44"))
 	_pause_button.custom_minimum_size = Vector2(132, 48)
-	_pause_button.add_theme_font_size_override("font_size", 18)
+	_pause_button.add_theme_font_size_override("font_size", _fs(18))
 	_pause_button.pressed.connect(func() -> void: pause_requested.emit())
 	hud.add_child(_pause_button)
+
+
+# ============================================================================
+# CONTROLS HINT (shown until the player first moves)
+# ============================================================================
+
+var _controls_hint: Control
+var _controls_hint_keys: Control
+var _controls_hint_text: Label
+var _controls_hint_tween: Tween
+
+
+func _build_controls_hint() -> void:
+	_controls_hint = Control.new()
+	_controls_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_controls_hint.visible = false
+	_controls_hint.z_index = 40
+	_set_rect(_controls_hint, Vector4(0.5, 1, 0.5, 1), Vector4(-300, -260, 300, -84))
+	hud.add_child(_controls_hint)
+
+	var panel := PanelContainer.new()
+	_full_rect(panel)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.05, 0.09, 0.74)
+	style.border_color = Color("#7be9ff")
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(16)
+	style.content_margin_left = 16
+	style.content_margin_right = 16
+	style.content_margin_top = 10
+	style.content_margin_bottom = 12
+	panel.add_theme_stylebox_override("panel", style)
+	_controls_hint.add_child(panel)
+
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 8)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(box)
+
+	box.add_child(_label("STAY AWAY FROM THE RED", 26, Color("#ff6b7a")))
+
+	var keys := HBoxContainer.new()
+	keys.alignment = BoxContainer.ALIGNMENT_CENTER
+	keys.add_theme_constant_override("separation", 8)
+	keys.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for key_text in ["W", "A", "S", "D"]:
+		keys.add_child(_make_keycap(key_text))
+	box.add_child(keys)
+	_controls_hint_keys = keys
+
+	_controls_hint_text = _label("OR ARROW KEYS, OR HOLD THE MOUSE BUTTON", 20, Color("#d6d9e4"))
+	box.add_child(_controls_hint_text)
+
+
+func _make_keycap(text: String) -> PanelContainer:
+	var cap := PanelContainer.new()
+	cap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cap.custom_minimum_size = Vector2(48, 48)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#2a2f40")
+	style.border_color = Color("#9da3b4")
+	style.set_border_width_all(2)
+	style.border_width_bottom = 5
+	style.set_corner_radius_all(8)
+	cap.add_theme_stylebox_override("panel", style)
+	cap.add_child(_label(text, 26, Color.WHITE))
+	return cap
+
+
+func show_controls_hint(touch: bool) -> void:
+	if not is_instance_valid(_controls_hint):
+		return
+	_controls_hint_keys.visible = not touch
+	if touch:
+		_controls_hint_text.text = "DRAG THE JOYSTICK TO MOVE"
+		_controls_hint_text.add_theme_font_size_override("font_size", 24)
+	else:
+		_controls_hint_text.text = "OR ARROW KEYS, OR HOLD THE MOUSE BUTTON"
+		_controls_hint_text.add_theme_font_size_override("font_size", 20)
+	# Narrow screens: never wider than the viewport.
+	var w := minf(600.0, get_viewport().get_visible_rect().size.x - 24.0)
+	_set_rect(_controls_hint, Vector4(0.5, 1, 0.5, 1), Vector4(-w * 0.5, -260, w * 0.5, -84))
+	_controls_hint.visible = true
+	_controls_hint.modulate.a = 1.0
+	_kill_tween(_controls_hint_tween)
+	if not _reduced_effects:
+		_controls_hint_tween = create_tween().set_loops()
+		_controls_hint_tween.tween_property(_controls_hint, "modulate:a", 0.7, 0.6).set_trans(Tween.TRANS_SINE)
+		_controls_hint_tween.tween_property(_controls_hint, "modulate:a", 1.0, 0.6).set_trans(Tween.TRANS_SINE)
+
+
+func hide_controls_hint() -> void:
+	if not is_instance_valid(_controls_hint):
+		return
+	_kill_tween(_controls_hint_tween)
+	_controls_hint.visible = false
 
 
 func _on_item_pressed(index: int) -> void:
@@ -1120,7 +1184,7 @@ func _build_menu() -> void:
 	for i in range(MODE_NAMES.size()):
 		var mode_button := _button(MODE_NAMES[i] + "\n" + MODE_SUBTITLES[i], Color("#292d3a"))
 		mode_button.custom_minimum_size = Vector2(120, 62)
-		mode_button.add_theme_font_size_override("font_size", 16)
+		mode_button.add_theme_font_size_override("font_size", _fs(16))
 		mode_button.pressed.connect(_on_mode_pressed.bind(i))
 		modes.add_child(mode_button)
 		_mode_buttons.append(mode_button)
@@ -1170,7 +1234,7 @@ func _add_title_shadow(l: Label) -> void:
 func _add_menu_nav_button(parent: HBoxContainer, text: String, action: Callable) -> void:
 	var button := _button(text, Color("#20232d"))
 	button.custom_minimum_size = Vector2(112, 46)
-	button.add_theme_font_size_override("font_size", 15)
+	button.add_theme_font_size_override("font_size", _fs(15))
 	button.pressed.connect(action)
 	parent.add_child(button)
 
@@ -1254,14 +1318,14 @@ func _build_settings_menu() -> void:
 
 	_reset_button = _button("RESET GAME DATA", Color("#6d2020"))
 	_reset_button.custom_minimum_size = Vector2(320, 58)
-	_reset_button.add_theme_font_size_override("font_size", 18)
+	_reset_button.add_theme_font_size_override("font_size", _fs(18))
 	_reset_button.pressed.connect(_on_reset_pressed)
 	settings_box.add_child(_reset_button)
 
 	# BACK stays outside the scroll area so it is always reachable.
 	var back := _button("BACK", Color("#3a3a44"))
 	back.custom_minimum_size = Vector2(320, 58)
-	back.add_theme_font_size_override("font_size", 18)
+	back.add_theme_font_size_override("font_size", _fs(18))
 	back.pressed.connect(func() -> void: settings_menu_closed.emit())
 	box.add_child(back)
 	_focus_buttons[settings_panel] = back
@@ -1387,13 +1451,13 @@ func _build_shop_menu() -> void:
 	upgrade_box.add_child(_upgrade_label)
 	_upgrade_button = _button("UPGRADE", Color("#8b5a12"))
 	_upgrade_button.custom_minimum_size = Vector2(190, 44)
-	_upgrade_button.add_theme_font_size_override("font_size", 17)
+	_upgrade_button.add_theme_font_size_override("font_size", _fs(17))
 	_upgrade_button.pressed.connect(func() -> void: multiplier_upgrade_pressed.emit())
 	upgrade_box.add_child(_upgrade_button)
 	_add_coin_to_button(_upgrade_button)
 	box.add_child(_upgrade_row)
 
-	# Gems (rewarded ad placeholder).
+	# Gems (bought with coins).
 	var gem_row := _make_wide_card(GEM_COLOR)
 	var gem_box := gem_row.get_child(0) as HBoxContainer
 	var gem_icon := CurrencyIcon.new()
@@ -1410,12 +1474,14 @@ func _build_shop_menu() -> void:
 	gem_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	gem_text.add_child(gem_desc)
 	gem_box.add_child(gem_text)
-	_shop_gem_button = _button("WATCH AD  +1 GEM", Color("#5b21b6"))
-	_shop_gem_button.custom_minimum_size = Vector2(190, 44)
-	_shop_gem_button.add_theme_font_size_override("font_size", 16)
-	_shop_gem_button.pressed.connect(func() -> void: gem_ad_requested.emit("shop"))
-	gem_box.add_child(_shop_gem_button)
-	_add_shine(_shop_gem_button)
+	var gem_buy_button := _button("BUY 1 GEM  500", Color("#5b21b6"))
+	gem_buy_button.custom_minimum_size = Vector2(190, 44)
+	gem_buy_button.add_theme_font_size_override("font_size", _fs(16))
+	gem_buy_button.pressed.connect(func() -> void: shop_action.emit(3, "buy"))
+	gem_box.add_child(gem_buy_button)
+	_add_coin_to_button(gem_buy_button)
+	_add_shine(gem_buy_button)
+	_shop_gem_button = gem_buy_button
 	box.add_child(gem_row)
 
 	var back := _button("BACK", Color("#3a3a44"))
@@ -1527,7 +1593,7 @@ func _make_shop_card(index: int, def: Dictionary) -> Control:
 
 	var button := _button("BUY", color.darkened(0.45))
 	button.custom_minimum_size = Vector2(172, 46)
-	button.add_theme_font_size_override("font_size", 18)
+	button.add_theme_font_size_override("font_size", _fs(18))
 	button.pressed.connect(_on_shop_pressed.bind(index))
 	col.add_child(button)
 	_add_coin_to_button(button)
@@ -1550,6 +1616,16 @@ func _add_coin_to_button(button: Button) -> void:
 	coin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_set_rect(coin, Vector4(1, 0.5, 1, 0.5), Vector4(-38, -12, -14, 12))
 	button.add_child(coin)
+	# Reserve room on the right so the (centered) label never runs under the icon.
+	# Styles are duplicated because _get_button_styles() may share them between buttons.
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		var sb := button.get_theme_stylebox(state) as StyleBox
+		if sb == null:
+			continue
+		sb = sb.duplicate() as StyleBox
+		sb.content_margin_left = 10.0
+		sb.content_margin_right = 44.0
+		button.add_theme_stylebox_override(state, sb)
 
 
 ## Light strip that sweeps across a button now and then (see _start_shop_tweens).
@@ -1804,6 +1880,8 @@ func shop_denied(item: int) -> void:
 	if item >= 0 and item < _shop_cards.size():
 		target = _shop_cards[item]
 	elif item == 3:
+		target = _shop_gem_button
+	elif item == 4:
 		target = _upgrade_row
 	if target == null:
 		return
@@ -1885,7 +1963,7 @@ func _build_skin_menu() -> void:
 
 		var skin_button := _button(str(skin_data.name), Color("#292d3a"))
 		skin_button.custom_minimum_size = Vector2(SKIN_CARD_SIZE, 40)
-		skin_button.add_theme_font_size_override("font_size", 16)
+		skin_button.add_theme_font_size_override("font_size", _fs(16))
 		skin_button.add_theme_color_override("font_color", Color.WHITE)
 		skin_button.add_theme_color_override("font_hover_color", Color.WHITE)
 		skin_button.pressed.connect(_on_skin_pressed.bind(i))
@@ -1938,13 +2016,6 @@ func _build_game_over() -> void:
 	_try_again_button.pressed.connect(func() -> void: try_again_pressed.emit())
 	box.add_child(_try_again_button)
 	_focus_buttons[go_panel] = _try_again_button
-
-	_go_ad_button = _button("WATCH AD  +1 GEM", Color("#5b21b6"))
-	_go_ad_button.custom_minimum_size = Vector2(320, 50)
-	_go_ad_button.add_theme_font_size_override("font_size", 18)
-	_go_ad_button.pressed.connect(func() -> void: gem_ad_requested.emit("gameover"))
-	box.add_child(_go_ad_button)
-	_add_shine(_go_ad_button)
 
 	var menu := _button("MENU", Color("#3a3a44"))
 	menu.pressed.connect(func() -> void: menu_pressed.emit())
@@ -2030,64 +2101,14 @@ func _build_revive_menu() -> void:
 	box.add_child(_revive_button)
 	_focus_buttons[revive_panel] = _revive_button
 
-	_revive_ad_button = _button("OR WATCH AN AD: FREE REVIVE", Color("#5b21b6"))
-	_revive_ad_button.custom_minimum_size = Vector2(360, 58)
-	_revive_ad_button.add_theme_font_size_override("font_size", 18)
-	_revive_ad_button.pressed.connect(func() -> void: revive_ad_pressed.emit())
-	box.add_child(_revive_ad_button)
-
 	_revive_skip_button = _button("NO THANKS", Color("#3a3a44"))
 	_revive_skip_button.custom_minimum_size = Vector2(240, 44)
-	_revive_skip_button.add_theme_font_size_override("font_size", 16)
+	_revive_skip_button.add_theme_font_size_override("font_size", _fs(16))
 	_revive_skip_button.pressed.connect(func() -> void: revive_declined.emit())
 	box.add_child(_revive_skip_button)
 
 	_revive_info = _label("", 14, Color("#777d91"))
 	box.add_child(_revive_info)
-
-
-# ============================================================================
-# AD PLACEHOLDER (no real ads: this is where an ad SDK would draw its screen)
-# ============================================================================
-
-func _build_ad_placeholder() -> void:
-	_ad_panel = _make_panel(Color(0.02, 0.02, 0.05, 0.94))
-	add_child(_ad_panel)
-
-	var center := CenterContainer.new()
-	_full_rect(center)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ad_panel.add_child(center)
-
-	var box := VBoxContainer.new()
-	box.alignment = BoxContainer.ALIGNMENT_CENTER
-	box.add_theme_constant_override("separation", 14)
-	center.add_child(box)
-
-	_ad_title = _label("AD PLACEHOLDER", 44, Color.WHITE)
-	box.add_child(_ad_title)
-	box.add_child(_label("A REWARDED AD WOULD PLAY HERE", 18, Color("#9da3b4")))
-
-	var track := ColorRect.new()
-	track.color = Color("#303443")
-	track.custom_minimum_size = Vector2(320, 10)
-	track.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	box.add_child(track)
-
-	_ad_bar = ColorRect.new()
-	_ad_bar.color = Color("#a78bfa")
-	_ad_bar.size = Vector2(0.0, 10.0)
-	track.add_child(_ad_bar)
-
-	var reward := HBoxContainer.new()
-	reward.alignment = BoxContainer.ALIGNMENT_CENTER
-	reward.add_theme_constant_override("separation", 8)
-	var reward_icon := CurrencyIcon.new()
-	reward_icon.kind = CurrencyIcon.Kind.GEM
-	reward_icon.custom_minimum_size = Vector2(30, 30)
-	reward.add_child(reward_icon)
-	reward.add_child(_label("REWARD: +1 GEM", 22, GEM_COLOR))
-	box.add_child(reward)
 
 
 # ============================================================================
@@ -2513,7 +2534,7 @@ func _apply_responsive_layout() -> void:
 		_coins_label.position = Vector2(left_x + (78.0 if compact else 86.0), 40.0 if compact else 54.0)
 		_coins_label.size = Vector2(maxf(80.0, left_w - 65.0), 24.0)
 		_coins_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		_coins_label.add_theme_font_size_override("font_size", 16 if compact else 20)
+		_coins_label.add_theme_font_size_override("font_size", 18 if compact else 24)
 		_coins_label.pivot_offset = _coins_label.size * 0.5
 
 		# Timer occupies a bounded center region. It never crosses the score or
@@ -2530,43 +2551,56 @@ func _apply_responsive_layout() -> void:
 		# Best score stays on the right with a fixed safe width.
 		var best_w := clampf(viewport_size.x * 0.25, 92.0, 190.0)
 		var best_x := viewport_size.x - best_w - (12.0 if compact else 24.0)
-		_set_rect(hud_best, Vector4(0, 0, 0, 0), Vector4(best_x, 12.0 if compact else 20.0, viewport_size.x - (12.0 if compact else 24.0), 42.0 if compact else 58.0))
-		hud_best.add_theme_font_size_override("font_size", 19 if compact else 30)
+		_set_rect(
+		hud_best, 
+		Vector4(0, 0, 0, 0), 
+		Vector4(
+			best_x, 
+			10.0 if compact else 15.0, 
+			viewport_size.x - (12.0 if compact else 24.0),
+		 	42.0 if compact else 58.0
+		))
+		hud_best.add_theme_font_size_override("font_size", 19 if compact else 25)
 		hud_best.pivot_offset = hud_best.size * 0.5
 
 		# Gem counter under the best score.
 		if is_instance_valid(_gem_chip):
 			var chip_margin := 12.0 if compact else 24.0
 			var chip_y := 44.0 if compact else 62.0
-			_set_rect(_gem_chip, Vector4(0, 0, 0, 0), Vector4(viewport_size.x - 130.0 - chip_margin, chip_y, viewport_size.x - chip_margin, chip_y + 28.0))
+			_set_rect(_gem_chip, Vector4(0, 0, 0, 0), 
+			Vector4(
+				viewport_size.x - 130.0 - chip_margin, 
+				chip_y-20, 
+				viewport_size.x - chip_margin, 
+				chip_y + 28.0))
 			_gem_label.add_theme_font_size_override("font_size", 20 if compact else 26)
 			_gem_chip.pivot_offset = _gem_chip.size * 0.5
 
 		# Stage + powerup panels. Both live on the LEFT so they do not fight
 		# with the timer/best-score area. Stage is intentionally taller.
-		var panel_w := clampf(viewport_size.x * 0.30, 190.0, 272.0)
+		var panel_w := clampf(viewport_size.x * 0.30, 190.0, 250.0)
 		if compact:
 			panel_w = minf(viewport_size.x - 24.0, 250.0)
 			# Compact: stage starts below the pause button; powerups stay on the right.
 			_set_rect(_stage_background, Vector4(0, 0, 0, 0), Vector4(12.0, 140.0, 12.0 + panel_w, 290.0))
 			var effects_w := minf(viewport_size.x - 24.0, 250.0)
-			_set_rect(_effects_bg, Vector4(1, 0, 1, 0), Vector4(-12.0 - effects_w, 140.0, -12.0, 262.0))
+			_set_rect(_effects_bg, Vector4(1, 0, 1, 0), Vector4(-12.0 - effects_w, 140.0, -12.0, 286.0))
 		else:
 			# Desktop: stage is lower on the left, safely below the pause button.
 			_set_rect(_stage_background, Vector4(0, 0, 0, 0), Vector4(24.0, 170.0, 24.0 + panel_w, 350.0))
 			# Active powerups remain permanently positioned on the right.
-			_set_rect(_effects_bg, Vector4(1, 0, 1, 0), Vector4(-18.0 - panel_w, 108.0, -18.0, 230.0))
+			_set_rect(_effects_bg, Vector4(1, 0, 1, 0), Vector4(-18.0 - panel_w, 108.0, -18.0, 254.0))
 
 		# Pause button moves under the score stack on compact screens.
 		if is_instance_valid(_pause_button):
 			if compact:
 				_pause_button.position = Vector2(12.0, 86.0)
 				_pause_button.custom_minimum_size = Vector2(104.0, 40.0)
-				_pause_button.add_theme_font_size_override("font_size", 15)
+				_pause_button.add_theme_font_size_override("font_size", _fs(15))
 			else:
 				_pause_button.position = Vector2(24.0, 104.0)
 				_pause_button.custom_minimum_size = Vector2(132.0, 48.0)
-				_pause_button.add_theme_font_size_override("font_size", 18)
+				_pause_button.add_theme_font_size_override("font_size", _fs(18))
 
 		# Bottom item bar. When touch controls are active, reserve a separate
 		# left joystick zone so the two controls cannot overlap.
@@ -2589,7 +2623,7 @@ func _apply_responsive_layout() -> void:
 			_set_rect(_item_bar, Vector4(0.5, 1, 0.5, 1), Vector4(-bar_w * 0.5, -bottom_margin - item_h, bar_w * 0.5, -bottom_margin))
 			_item_bar.add_theme_constant_override("separation", 8)
 			for b in _item_buttons:
-				b.add_theme_font_size_override("font_size", 16)
+				b.add_theme_font_size_override("font_size", _fs(16))
 				b.custom_minimum_size.y = item_h
 
 		# Responsive joystick: smaller on narrow/short screens and always in its
@@ -2662,10 +2696,22 @@ func _kill_tween(t: Tween) -> void:
 # LABEL / BUTTON HELPERS
 # ============================================================================
 
+## Smallest text sizes, in design pixels (the game is laid out for 1280x720).
+## CrazyGames shows the game in iframes as small as 800x450, where the canvas
+## is scaled to 0.625, so anything under 20 here was unreadable (about 9 px).
+## 13..19 become 20..22 and anything smaller becomes 20.
+func _fs(size: int) -> int:
+	if size >= 20:
+		return size
+	if size >= 17:
+		return 22
+	return 20
+
+
 func _label(text: String, font_size: int, color: Color) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", font_size)
+	l.add_theme_font_size_override("font_size", _fs(font_size))
 	l.add_theme_color_override("font_color", color)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE

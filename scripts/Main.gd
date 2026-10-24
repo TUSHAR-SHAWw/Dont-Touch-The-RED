@@ -20,18 +20,22 @@ const REDUCED_EFFECTS_KEY := "reduced_effects"
 const ITEM_INVENTORY_KEY := "item_inventory"
 const MUSIC_VOLUME_KEY := "music_volume"
 const SFX_VOLUME_KEY := "sfx_volume"
+const CONTROLS_HINT_DONE_KEY := "controls_hint_done"
+
+## The how-to-move overlay stays until the player first moves (that is the
+## "skip"), and is not shown again once they have.
+const HINT_MOVE_SPEED := 60.0
 
 const SaveData := preload("res://scripts/SaveData.gd")
 const FX := preload("res://scripts/FX.gd")
-const AdManager := preload("res://scripts/AdManager.gd")
 const Coin := preload("res://scripts/Coin.gd")
 const Powerup := preload("res://scripts/Powerup.gd")
 const SkinCatalog := preload("res://scripts/SkinCatalog.gd")
 const CoinScene := preload("res://scenes/Coin.tscn")
 const PowerupScene := preload("res://scenes/Powerup.tscn")
 
-## Item shop prices (shield, double score, magnet). Keep in sync with UIManager.SHOP_PRICES.
-const SHOP_COSTS := [30, 60, 90]
+## Item shop prices (shield, double score, magnet, gem). Keep in sync with UIManager.SHOP_PRICES.
+const SHOP_COSTS := [30, 60, 90, 500]
 const MULTIPLIER_MAX_LEVEL := 8
 
 ## Collected nodes are parked (invisible, no processing) and reused, so a run
@@ -45,7 +49,7 @@ const ZEN_STAGE_FACTORS := [1.2, 1.25, 1.3, 1.35]
 
 ## Death feel: slow motion (real seconds, so it is not stretched by itself).
 const DEATH_SLOWMO_SCALE := 0.25
-const DEATH_SLOWMO_SECONDS := 0.55
+const DEATH_SLOWMO_SECONDS := 0.4
 ## Ignore clicks / Space for this long when the revive prompt opens, so a
 ## panicked key-mash can never spend a gem by accident.
 const REVIVE_INPUT_LOCK := 0.5
@@ -86,6 +90,8 @@ var is_paused := false
 var item_inventory: Array = [0, 0, 0]
 
 var revives_used := 0
+var _controls_hint_done := false
+var _controls_hint_active := false
 var _revive_time_left := 0.0
 var _revive_lock := 0.0
 var _death_token := 0
@@ -100,7 +106,6 @@ var _save_pending := false
 var _danger_rects: Array[Rect2] = []
 var _save: RefCounted
 var _fx: Node2D
-var _ads: Node
 
 ## True while the shop / skins / settings screen is open on top of the menu.
 var _overlay_open := false
@@ -132,17 +137,11 @@ func _ready() -> void:
 	_save = SaveData.new()
 	_save.load_file()
 
-	# Effects layer (drawn above everything in the world) and ad hook.
+	# Effects layer (drawn above everything in the world).
 	_fx = FX.new()
 	_fx.name = "FX"
 	_fx.z_index = 60
 	add_child(_fx)
-	_ads = AdManager.new()
-	_ads.name = "AdManager"
-	add_child(_ads)
-	_ads.ad_started.connect(_on_ad_started)
-	_ads.ad_rewarded.connect(_on_ad_rewarded)
-	_ads.ad_failed.connect(_on_ad_failed)
 
 	player.shield_handler = Callable(self, "_try_consume_shield")
 	audio.play_background_music()
@@ -186,9 +185,7 @@ func _ready() -> void:
 	ui.item_use_requested.connect(_on_item_use_requested)
 	ui.volume_changed.connect(_on_volume_changed)
 	ui.revive_pressed.connect(_on_revive_pressed)
-	ui.revive_ad_pressed.connect(_on_revive_ad_pressed)
 	ui.revive_declined.connect(_on_revive_declined)
-	ui.gem_ad_requested.connect(_on_gem_ad_requested)
 	danger_manager.danger_spawned.connect(_on_danger_spawned)
 	player.died.connect(_on_player_died)
 	player.wall_hit.connect(_on_player_wall_hit)
@@ -202,11 +199,13 @@ func _ready() -> void:
 	music_volume_db = _load_volume(MUSIC_VOLUME_KEY, -12.0)
 	sfx_volume_db = _load_volume(SFX_VOLUME_KEY, -6.0)
 	item_inventory = _load_item_inventory()
+	_controls_hint_done = bool(_save.get_value("meta", CONTROLS_HINT_DONE_KEY, false))
 
 	ui.set_selected_mode(selected_mode)
 	_push_all_to_ui()
 	_apply_settings_to_systems()
 	_enter_menu()
+	CrazySDK.loading_stop()
 
 
 func _exit_tree() -> void:
@@ -235,6 +234,8 @@ func _process(delta: float) -> void:
 
 func _process_playing(delta: float) -> void:
 	elapsed += delta
+	if _controls_hint_active and player.velocity.length() > HINT_MOVE_SPEED:
+		_dismiss_controls_hint(true)
 	coin_spawn_timer -= delta
 	if coin_spawn_timer <= 0.0:
 		_spawn_coin()
@@ -267,12 +268,20 @@ func _process_playing(delta: float) -> void:
 		_next_milestone += int(tuning.milestone_interval)
 
 
+func _dismiss_controls_hint(learned: bool) -> void:
+	if not _controls_hint_active:
+		return
+	_controls_hint_active = false
+	ui.hide_controls_hint()
+	if learned:
+		_controls_hint_done = true
+		_save.set_value("meta", CONTROLS_HINT_DONE_KEY, true)
+		_request_save()
+
+
 func _process_revive(delta: float) -> void:
 	if _revive_lock > 0.0:
 		_revive_lock = maxf(0.0, _revive_lock - delta)
-	# The countdown waits while an ad is being shown.
-	if _ads.is_showing:
-		return
 	_revive_time_left -= delta
 	ui.update_revive_timer(_revive_time_left, tuning.revive_prompt_seconds)
 	if _revive_time_left <= 0.0:
@@ -298,7 +307,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# so this won't double-trigger while a button has focus). Ignored while a
 	# shop / skins / settings screen is open or a run is already loading.
 	if event.is_action_pressed("ui_accept"):
-		if (state == State.MENU or state == State.GAME_OVER) and not _overlay_open and not _starting and not _ads.is_showing:
+		if (state == State.MENU or state == State.GAME_OVER) and not _overlay_open and not _starting:
 			start_game()
 		elif state == State.REVIVE and gems >= tuning.gem_revive_cost:
 			_on_revive_pressed()
@@ -309,19 +318,9 @@ func _unhandled_input(event: InputEvent) -> void:
 # ---------------------------------------------------------------------------
 
 func start_game() -> void:
-	if _starting:
-		return
-	_starting = true
 	_overlay_open = false
-	var token := _start_token
 	audio.play_gameplay_music()
 	audio.pause_background_music()
-	ui.show_loading("LOADING RUN")
-	await get_tree().create_timer(0.28).timeout
-	# Cancelled (e.g. back to the menu) while loading.
-	if token != _start_token:
-		return
-	_starting = false
 	Engine.time_scale = 1.0
 	_death_token += 1
 	elapsed = 0.0
@@ -343,6 +342,7 @@ func start_game() -> void:
 	_next_milestone = int(tuning.milestone_interval)
 	_current_stage = 0
 	state = State.PLAYING
+	CrazySDK.set_gameplay(true)
 	_fx.clear()
 	player.reset()
 	player.set_skin(selected_skin)
@@ -353,11 +353,17 @@ func start_game() -> void:
 	ui.set_item_inventory(item_inventory)
 	ui.set_gems(gems)
 	ui.show_stage("STAGE 1", "COLD START")
+	_controls_hint_active = not _controls_hint_done
+	if _controls_hint_active:
+		ui.show_controls_hint(touch_controls)
+	else:
+		ui.hide_controls_hint()
 	_clear_coins()
 	_clear_powerups()
 
 
 func _enter_menu() -> void:
+	CrazySDK.set_gameplay(false)
 	_start_token += 1
 	_death_token += 1
 	_starting = false
@@ -370,10 +376,10 @@ func _enter_menu() -> void:
 	_clear_powerups()
 	_fx.clear()
 	state = State.MENU
+	_dismiss_controls_hint(false)
 	audio.play_background_music()
 	player.set_shield_visible(false)
 	ui.hide_revive()
-	ui.hide_ad_placeholder()
 	ui.show_menu(best)
 
 
@@ -381,6 +387,8 @@ func _on_player_died() -> void:
 	if state != State.PLAYING:
 		return
 	state = State.DYING
+	CrazySDK.set_gameplay(false)
+	_dismiss_controls_hint(false)
 	_death_token += 1
 	var token := _death_token
 	audio.play_death()
@@ -416,7 +424,9 @@ func _on_player_died() -> void:
 func _can_offer_revive() -> bool:
 	if revives_used >= tuning.max_revives_per_run:
 		return false
-	return gems >= tuning.gem_revive_cost or _ads.enabled
+	# Only offer a second chance the player can actually take. (An empty
+	# "out of gems" screen after every death was a dead end.)
+	return gems >= tuning.gem_revive_cost
 
 
 func _begin_revive_prompt() -> void:
@@ -427,7 +437,7 @@ func _begin_revive_prompt() -> void:
 
 
 func _on_revive_pressed() -> void:
-	if state != State.REVIVE or _revive_lock > 0.0 or _ads.is_showing:
+	if state != State.REVIVE or _revive_lock > 0.0:
 		return
 	if gems < tuning.gem_revive_cost:
 		audio.play_error()
@@ -435,14 +445,8 @@ func _on_revive_pressed() -> void:
 	_spend_gems_and_revive()
 
 
-func _on_revive_ad_pressed() -> void:
-	if state != State.REVIVE or _revive_lock > 0.0:
-		return
-	_on_gem_ad_requested("revive")
-
-
 func _on_revive_declined() -> void:
-	if state != State.REVIVE or _ads.is_showing:
+	if state != State.REVIVE:
 		return
 	ui.hide_revive()
 	_finish_run()
@@ -458,6 +462,7 @@ func _spend_gems_and_revive() -> void:
 func _do_revive() -> void:
 	revives_used += 1
 	state = State.PLAYING
+	CrazySDK.set_gameplay(true)
 	ui.hide_revive()
 	danger_manager.resume(tuning.revive_pattern_delay)
 	player.revive()
@@ -489,6 +494,7 @@ func _bank_run() -> int:
 
 func _finish_run() -> void:
 	state = State.GAME_OVER
+	CrazySDK.set_gameplay(false)
 	danger_manager.stop()
 	var score := _bank_run()
 	var earned := run_coins
@@ -496,39 +502,6 @@ func _finish_run() -> void:
 	audio.play_background_music()
 	ui.set_gems(gems)
 	ui.show_game_over(score, best, earned, score_multiplier)
-
-
-# ---------------------------------------------------------------------------
-# Ads / gems
-# ---------------------------------------------------------------------------
-
-func _on_gem_ad_requested(placement: String) -> void:
-	if _ads.is_showing:
-		return
-	_ads.request_rewarded_ad(placement)
-
-
-func _on_ad_started(_placement: String) -> void:
-	if AdManager.USE_PLACEHOLDER_UI:
-		ui.show_ad_placeholder(AdManager.PLACEHOLDER_SECONDS)
-
-
-func _on_ad_rewarded(placement: String) -> void:
-	ui.hide_ad_placeholder()
-	gems += int(tuning.ad_gem_reward)
-	_request_save()
-	audio.play_gem()
-	ui.set_gems(gems, true)
-	ui.show_powerup("+%d GEM" % int(tuning.ad_gem_reward))
-	# During the revive prompt the ad's gem is used straight away.
-	if placement == "revive" and state == State.REVIVE and gems >= tuning.gem_revive_cost:
-		_spend_gems_and_revive()
-
-
-func _on_ad_failed(_placement: String, _reason: String) -> void:
-	ui.hide_ad_placeholder()
-	audio.play_error()
-	ui.show_powerup("AD NOT AVAILABLE")
 
 
 # ---------------------------------------------------------------------------
@@ -564,6 +537,8 @@ func _pause_game() -> void:
 	if state != State.PLAYING or is_paused:
 		return
 	is_paused = true
+	CrazySDK.set_gameplay(false)
+	ui.hide_controls_hint()
 	get_tree().paused = true
 	audio.play_background_music()
 	audio.pause_gameplay_music()
@@ -574,6 +549,9 @@ func _resume_game() -> void:
 	if not is_paused:
 		return
 	is_paused = false
+	CrazySDK.set_gameplay(true)
+	if _controls_hint_active:
+		ui.show_controls_hint(touch_controls)
 	get_tree().paused = false
 	audio.play_gameplay_music()
 	audio.pause_background_music()
@@ -613,11 +591,17 @@ func _on_shop_action(item: int, action: String) -> void:
 		ui.shop_denied(item)
 		return
 	coins -= SHOP_COSTS[item]
-	item_inventory[item] += 1
-	audio.play_purchase()
+	if item == 3:
+		# Buy 1 gem for 500 coins
+		gems += 1
+		audio.play_gem()
+		ui.set_gems(gems, true)
+	else:
+		item_inventory[item] += 1
+		audio.play_purchase()
+	ui.play_shop_purchase(item)
 	_request_save()
 	ui.set_shop(coins, item_inventory)
-	ui.play_shop_purchase(item)
 
 
 func _request_save() -> void:
@@ -664,6 +648,8 @@ func _reset_game_data() -> void:
 	music_volume_db = -12.0
 	sfx_volume_db = -6.0
 	item_inventory = [0, 0, 0]
+	_controls_hint_done = false
+	_save.set_value("meta", CONTROLS_HINT_DONE_KEY, false)
 	_overlay_open = false
 	_save_touch_controls()
 	_save_setting(MUSIC_ENABLED_KEY, music_enabled)
@@ -779,7 +765,7 @@ func _on_multiplier_upgrade() -> void:
 	var cost := _multiplier_upgrade_cost()
 	if coins < cost:
 		audio.play_error()
-		ui.shop_denied(3)
+		ui.shop_denied(4)
 		return
 	coins -= cost
 	multiplier_level += 1

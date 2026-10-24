@@ -177,5 +177,5 @@ extends Node
 ## Pause before the next danger pattern after a revive.
 @export var revive_pattern_delay: float = 1.6
 
-## Gems granted per completed rewarded ad.
+## Gems granted per reward (currently unused: no ads in this build).
 @export var ad_gem_reward: int = 1

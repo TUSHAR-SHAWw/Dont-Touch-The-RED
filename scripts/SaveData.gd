@@ -14,6 +14,10 @@ func load_file() -> void:
 
 
 func get_value(section: String, key: String, fallback: Variant) -> Variant:
+	# Check first: Godot logs an error when get_value() gets a null default for a
+	# missing key (which is what a brand-new player's empty save looks like).
+	if not _cfg.has_section_key(section, key):
+		return fallback
 	return _cfg.get_value(section, key, fallback)
 
 

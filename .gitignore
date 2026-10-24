@@ -2,3 +2,6 @@
 .vscode/
 build/
 scenes/*.tmp
+*.exe
+*.tmp
+.kilo/

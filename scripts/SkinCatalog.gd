@@ -8,11 +8,11 @@ extends RefCounted
 
 ## Used when the catalog is empty or an entry is broken.
 const DEFAULT_SKIN := {
-	"name": "RED",
+	"name": "BLUE",
 	"cost": 0,
-	"texture": "res://assets/skins/red.png",
-	"body": Color("#e02323"),
-	"highlight": Color("#ff8b7a"),
+	"texture": "res://assets/skins/blue.png",
+	"body": Color("#2f6fe0"),
+	"highlight": Color("#9cc0ff"),
 }
 
 
@@ -20,38 +20,29 @@ const DEFAULT_SKIN := {
 ## `body` tints the motion trail, `highlight` tints the pulse ring. Both are
 ## chosen to match what the skin's name suggests.
 const ENTRIES := [
-	{"name": "RED", "cost": 0, "texture": preload("res://assets/skins/red.png"),
-		"body": Color("#e02323"), "highlight": Color("#ff8b7a")},
+	{"name": "BLUE", "cost": 0, "texture": preload("res://assets/skins/blue.png"),
+		"body": Color("#2f6fe0"), "highlight": Color("#9cc0ff")},
 
 	{"name": "BASKETBALL", "cost": 75, "texture": preload("res://assets/skins/basket-old.png"),
 		"body": Color("#d97706"), "highlight": Color("#fed7aa")},
 
-	{"name": "TENNIS BALL", "cost": 250, "texture": preload("res://assets/skins/tennis-ball.png"),
-		"body": Color("#bef264"), "highlight": Color("#ecfccb")},
-		
-	{"name": "BASKETBALL PRO", "cost": 100, "texture": preload("res://assets/skins/basketball.png"),
-		"body": Color("#ea580c"), "highlight": Color("#fdba74")},
-
 	{"name": "FOOTBALL", "cost": 150, "texture": preload("res://assets/skins/footbaall.png"),
 		"body": Color("#78350f"), "highlight": Color("#d6a77a")},
-		
-	{"name": "VOLLEYBALL", "cost": 250, "texture": preload("res://assets/skins/volley-ball.png"),
+
+	{"name": "TENNIS BALL", "cost": 250, "texture": preload("res://assets/skins/tennis-ball.png"),
+		"body": Color("#bef264"), "highlight": Color("#ecfccb")},
+
+	{"name": "VOLLEYBALL", "cost": 300, "texture": preload("res://assets/skins/volley-ball.png"),
 		"body": Color("#f8fafc"), "highlight": Color("#dbeafe")},
-		
+
 	{"name": "BASEBALL", "cost": 350, "texture": preload("res://assets/skins/base-ball.png"),
 		"body": Color("#f5f0df"), "highlight": Color("#ffffff")},
-		
+
 	{"name": "8 BALL", "cost": 400, "texture": preload("res://assets/skins/8ball.png"),
 		"body": Color("#171717"), "highlight": Color("#737373")},
 
-	{"name": "PX FOOTBALL", "cost": 450, "texture": preload("res://assets/skins/PXfootball.png"),
-		"body": Color("#16a34a"), "highlight": Color("#86efac")},
-
 	{"name": "MAGMA", "cost": 500, "texture": preload("res://assets/skins/magma.png"),
 		"body": Color("#7f1d1d"), "highlight": Color("#ff7a3d")},
-		
-	{"name": "EMOJI", "cost": 800, "texture": preload("res://assets/skins/emoji.png"),
-		"body": Color("#facc15"), "highlight": Color("#fef08a")},
 
 	{"name": "PUMPKIN", "cost": 1000, "texture": preload("res://assets/skins/pumpkin.png"),
 		"body": Color("#f97316"), "highlight": Color("#fdba74")},
@@ -59,14 +50,8 @@ const ENTRIES := [
 	{"name": "GHOST", "cost": 1500, "texture": preload("res://assets/skins/ghost.png"),
 		"body": Color("#cbd5e1"), "highlight": Color("#ffffff")},
 
-	{"name": "DONUT", "cost": 2000, "texture": preload("res://assets/skins/dounut.png"),
-		"body": Color("#ec4899"), "highlight": Color("#fbcfe8")},
-		
 	{"name": "BOMB", "cost": 2500, "texture": preload("res://assets/skins/bomb.png"),
-		"body": Color("#292524"), "highlight": Color("#a8a29e")},
-
-	{"name": "DEATH STAR", "cost": 3000, "texture": preload("res://assets/skins/DeathStar.png"),
-		"body": Color("#334155"), "highlight": Color("#94a3b8")}
+		"body": Color("#292524"), "highlight": Color("#a8a29e")}
 ]
 
 ## Used by the UI. Each entry is a Dictionary with: name, cost, texture (the
